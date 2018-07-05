@@ -7,6 +7,8 @@
  */
 
 #include <InternetMessage/InternetMessage.hpp>
+#include <sstream>
+#include <string>
 
 namespace {
 
@@ -71,7 +73,7 @@ namespace InternetMessage {
     {
     }
 
-    bool InternetMessage::ParseFromString(const std::string& rawMessage) {
+    bool InternetMessage::ParseRawMessage(const std::string& rawMessage) {
         size_t offset = 0;
         while(offset < rawMessage.length()) {
             auto lineTerminator = rawMessage.find("\r\n", offset);
@@ -117,6 +119,16 @@ namespace InternetMessage {
 
     std::string InternetMessage::GetBody() const {
         return impl_->body;
+    }
+
+    std::string InternetMessage::GenerateRawMessage() const {
+        std::ostringstream rawMessage;
+        for (const auto& header: impl_->headers) {
+            rawMessage << header.name << ": " << header.value << "\r\n";
+        }
+        rawMessage << "\r\n";
+        rawMessage << impl_->body;
+        return rawMessage.str();
     }
 
 }

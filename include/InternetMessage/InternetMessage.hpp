@@ -103,7 +103,7 @@ namespace InternetMessage {
          *     An indication of whether or not the message was
          *     parsed successfully is returned.
          */
-        bool ParseFromString(const std::string& rawMessage);
+        bool ParseRawMessage(const std::string& rawMessage);
 
         /**
          * This method returns the collection of headers attached
@@ -137,6 +137,17 @@ namespace InternetMessage {
          *     The body of the message is returned.
          */
         std::string GetBody() const;
+
+        /**
+         * This method constructs and returns the raw string
+         * internet message based on the headers and body that have been
+         * collected in the object.
+         *
+         * @return
+         *     The raw string internet message based on the headers and body
+         *     that have been collected in the object is returned.
+         */
+        std::string GenerateRawMessage() const;
 
         // Private properties
     private:
