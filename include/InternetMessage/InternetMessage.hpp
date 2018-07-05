@@ -129,6 +129,23 @@ namespace InternetMessage {
         bool HasHeader(const HeaderName& name) const;
 
         /**
+         * This method returns the value for the header with the given
+         * name in the message.
+         *
+         * @param[in] name
+         *     This is the name of the header whose value should be returned.
+         *
+         * @return
+         *     The value of the given header is returned.
+         *
+         * @note
+         *     If there is no header with the given name in the message,
+         *     then anything might be returned, but probably just
+         *     an empty string.  Good luck with that.
+         */
+        HeaderValue GetHeaderValue(const HeaderName& name) const;
+
+        /**
          * This method returns the part of the message that follows
          * all the headers, and represents the principal content
          * of the overall message.

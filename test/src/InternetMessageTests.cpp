@@ -82,3 +82,94 @@ TEST(InternetMessageTests, HttpServerResponseMessage) {
     ASSERT_EQ("Hello World! My payload includes a trailing CRLF.\r\n", msg.GetBody());
     ASSERT_EQ(rawMessage, msg.GenerateRawMessage());
 }
+
+TEST(InternetMessageTests, HeaderLineAlmostTooLong) {
+    InternetMessage::InternetMessage msg;
+    const std::string testHeaderName("X-Poggers");
+    const std::string testHeaderNameWithDelimiters = testHeaderName + ": ";
+    const std::string longestPossiblePoggers(998 - testHeaderNameWithDelimiters.length(), 'X');
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        + testHeaderNameWithDelimiters + longestPossiblePoggers + "\r\n"
+        + "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
+    ASSERT_EQ(longestPossiblePoggers, msg.GetHeaderValue(testHeaderName));
+}
+
+TEST(InternetMessageTests, HeaderLineTooLong) {
+    InternetMessage::InternetMessage msg;
+    const std::string testHeaderName("X-Poggers");
+    const std::string testHeaderNameWithDelimiters = testHeaderName + ": ";
+    const std::string valueIsTooLong(999 - testHeaderNameWithDelimiters.length(), 'X');
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        + testHeaderNameWithDelimiters + valueIsTooLong + "\r\n"
+        + "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
+
+TEST(InternetMessageTests, GetValueOfMissingHeader) {
+    InternetMessage::InternetMessage msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
+    ASSERT_EQ("FeelsBadMan", msg.GetHeaderValue("PePe"));
+}
+
+TEST(InternetMessageTests, HeaderWithNonAsciiCharacterInName) {
+    InternetMessage::InternetMessage msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Feels Bad Man: LUL\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
+
+TEST(InternetMessageTests, BodyWithLoneCRInMiddle) {
+    InternetMessage::InternetMessage msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+        "admiralB\radmiralEmo"
+    );
+    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
+
+TEST(InternetMessageTests, BodyWithLoneCRAtEnd) {
+    InternetMessage::InternetMessage msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+        "admiralBadmiralEmo\r"
+    );
+    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
+
+TEST(InternetMessageTests, BodyWithLoneLF) {
+    InternetMessage::InternetMessage msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+        "admiralB\nadmiralEmo"
+    );
+    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
