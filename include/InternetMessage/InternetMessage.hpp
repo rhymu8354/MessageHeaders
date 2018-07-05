@@ -10,6 +10,8 @@
  */
 
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace InternetMessage {
 
@@ -18,6 +20,63 @@ namespace InternetMessage {
      * as defined in RFC 2822 (https://tools.ietf.org/html/rfc2822).
      */
     class InternetMessage {
+        // Types
+    public:
+        /**
+         * This is how we handle the name of a internet message header.
+         */
+        typedef std::string HeaderName;
+
+        /**
+         * This is how we handle the value of a internet message header.
+         */
+        typedef std::string HeaderValue;
+
+        /**
+         * This represents a single header of the internet message.
+         */
+        struct Header {
+            // Properties
+
+            /**
+             * This is the part of a header that comes before the colon.
+             * It identifies the purpose of the header.
+             */
+            HeaderName name;
+
+            /**
+             * This is the part of a header that comes after the colon.
+             * It provides the value, setting, or context whose meaning
+             * depends on the header name.
+             */
+            HeaderValue value;
+
+            // Methods
+
+            /**
+             * This constructor initializes the header's components.
+             *
+             * @param[in] newName
+             *     This is the part of a header that comes before the colon.
+             *     It identifies the purpose of the header.
+             *
+             * @param[in] newValue
+             *     This is the part of a header that comes after the colon.
+             *     It provides the value, setting, or context whose meaning
+             *     depends on the header name.
+             */
+            Header(
+                const HeaderName& newName,
+                const HeaderValue& newValue
+            );
+        };
+
+        /**
+         * This represents the collection of all headers of
+         * the internet message.
+         */
+        typedef std::vector< Header > Headers;
+
         // Lifecycle management
     public:
         ~InternetMessage();
@@ -32,6 +91,52 @@ namespace InternetMessage {
          * This is the default constructor.
          */
         InternetMessage();
+
+        /**
+         * This method determines the headers and body
+         * of the message by parsing the raw message from a string.
+         *
+         * @param[in] rawMessage
+         *     This is the string rendering of the message to parse.
+         *
+         * @return
+         *     An indication of whether or not the message was
+         *     parsed successfully is returned.
+         */
+        bool ParseFromString(const std::string& rawMessage);
+
+        /**
+         * This method returns the collection of headers attached
+         * to the message.
+         *
+         * @return
+         *     The collection of headers attached
+         *     to the message is returned.
+         */
+        Headers GetHeaders() const;
+
+        /**
+         * This method checks to see if there is a header in the message
+         * with the given name.
+         *
+         * @param[in] name
+         *     This is the name of the header for which to check.
+         *
+         * @return
+         *     An indication of whether or not there is a header
+         *     in the message with the given name is returned.
+         */
+        bool HasHeader(const HeaderName& name) const;
+
+        /**
+         * This method returns the part of the message that follows
+         * all the headers, and represents the principal content
+         * of the overall message.
+         *
+         * @return
+         *     The body of the message is returned.
+         */
+        std::string GetBody() const;
 
         // Private properties
     private:
