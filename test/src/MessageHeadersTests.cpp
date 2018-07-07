@@ -38,12 +38,12 @@ TEST(MessageHeadersTests, HttpClientRequestMessage) {
     }
     ASSERT_TRUE(headers.HasHeader("Host"));
     ASSERT_FALSE(headers.HasHeader("Foobar"));
-    ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
+    ASSERT_EQ(rawMessage, headers.GenerateRawHeaders());
 }
 
 TEST(MessageHeadersTests, HttpServerResponseMessage) {
     MessageHeaders::MessageHeaders headers;
-    const std::string rawMessage = (
+    const std::string rawHeaders = (
         "Date: Mon, 27 Jul 2009 12:28:53 GMT\r\n"
         "Server: Apache\r\n"
         "Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT\r\n"
@@ -53,9 +53,14 @@ TEST(MessageHeadersTests, HttpServerResponseMessage) {
         "Vary: Accept-Encoding\r\n"
         "Content-Type: text/plain\r\n"
         "\r\n"
-        "Hello World! My payload includes a trailing CRLF.\r\n"
     );
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    const std::string rawMessage = (
+        rawHeaders
+        + "Hello World! My payload includes a trailing CRLF.\r\n"
+    );
+    size_t bodyOffset;
+    ASSERT_TRUE(headers.ParseRawMessage(rawMessage, bodyOffset));
+    ASSERT_EQ(rawHeaders.length(), bodyOffset);
     const auto headerCollection = headers.GetAll();
     struct ExpectedHeader {
         std::string name;
@@ -78,7 +83,7 @@ TEST(MessageHeadersTests, HttpServerResponseMessage) {
     }
     ASSERT_TRUE(headers.HasHeader("Last-Modified"));
     ASSERT_FALSE(headers.HasHeader("Foobar"));
-    ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
+    ASSERT_EQ(rawHeaders, headers.GenerateRawHeaders());
 }
 
 TEST(MessageHeadersTests, HeaderLineAlmostTooLong) {

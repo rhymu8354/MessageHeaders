@@ -102,6 +102,27 @@ namespace MessageHeaders {
          * @param[in] rawMessage
          *     This is the string rendering of the message to parse.
          *
+         * @param[out] bodyOffset
+         *     This is where to store the offset into the given
+         *     raw message where the headers ended and the body,
+         *     if any, begins.
+         *
+         * @return
+         *     An indication of whether or not the message was
+         *     parsed successfully is returned.
+         */
+        bool ParseRawMessage(
+            const std::string& rawMessage,
+            size_t& bodyOffset
+        );
+
+        /**
+         * This method determines the headers
+         * of the message by parsing the raw message from a string.
+         *
+         * @param[in] rawMessage
+         *     This is the string rendering of the message to parse.
+         *
          * @return
          *     An indication of whether or not the message was
          *     parsed successfully is returned.
@@ -150,14 +171,14 @@ namespace MessageHeaders {
 
         /**
          * This method constructs and returns the raw string
-         * message based on the headers that have been
+         * headers based on the headers that have been
          * collected in the object.
          *
          * @return
          *     The raw string message based on the headers
          *     that have been collected in the object is returned.
          */
-        std::string GenerateRawMessage() const;
+        std::string GenerateRawHeaders() const;
 
         // Private properties
     private:

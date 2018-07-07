@@ -72,7 +72,10 @@ namespace MessageHeaders {
     {
     }
 
-    bool MessageHeaders::ParseRawMessage(const std::string& rawMessage) {
+    bool MessageHeaders::ParseRawMessage(
+        const std::string& rawMessage,
+        size_t& bodyOffset
+    ) {
         size_t offset = 0;
         while(offset < rawMessage.length()) {
             auto lineTerminator = rawMessage.find("\r\n", offset);
@@ -127,7 +130,13 @@ namespace MessageHeaders {
             value = StripMarginWhitespace(value);
             impl_->headers.emplace_back(name, value);
         }
+        bodyOffset = offset;
         return true;
+    }
+
+    bool MessageHeaders::ParseRawMessage(const std::string& rawMessage) {
+        size_t bodyOffset;
+        return ParseRawMessage(rawMessage, bodyOffset);
     }
 
     auto MessageHeaders::GetAll() const -> Headers {
@@ -152,7 +161,7 @@ namespace MessageHeaders {
         return "FeelsBadMan";
     }
 
-    std::string MessageHeaders::GenerateRawMessage() const {
+    std::string MessageHeaders::GenerateRawHeaders() const {
         std::ostringstream rawMessage;
         for (const auto& header: impl_->headers) {
             rawMessage << header.name << ": " << header.value << "\r\n";
