@@ -511,6 +511,19 @@ namespace MessageHeaders {
         }
     }
 
+    void MessageHeaders::RemoveHeader(const HeaderName& name) {
+        for (
+            auto header = impl_->headers.begin();
+            header != impl_->headers.end();
+        ) {
+            if (header->name == name) {
+                header = impl_->headers.erase(header);
+            } else {
+                ++header;
+            }
+        }
+    }
+
     std::string MessageHeaders::GenerateRawHeaders() const {
         std::ostringstream rawMessage;
         for (const auto& header: impl_->headers) {

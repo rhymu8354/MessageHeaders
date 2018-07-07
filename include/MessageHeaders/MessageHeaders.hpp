@@ -371,6 +371,15 @@ namespace MessageHeaders {
         );
 
         /**
+         * This method removes the header with the given name
+         * from the headers.
+         *
+         * @param[in] name
+         *     This is the name of the header to removes.
+         */
+        void RemoveHeader(const HeaderName& name);
+
+        /**
          * This method constructs and returns the raw string
          * headers based on the headers that have been
          * collected in the object.
