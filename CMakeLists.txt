@@ -1,16 +1,16 @@
-# CMakeLists.txt for InternetMessage
+# CMakeLists.txt for MessageHeaders
 #
 # © 2018 by Richard Walters
 
 cmake_minimum_required(VERSION 3.8)
-set(This InternetMessage)
+set(This MessageHeaders)
 
 set(Headers
-    include/InternetMessage/InternetMessage.hpp
+    include/MessageHeaders/MessageHeaders.hpp
 )
 
 set(Sources
-    src/InternetMessage.cpp
+    src/MessageHeaders.cpp
 )
 
 add_library(${This} STATIC ${Sources} ${Headers})

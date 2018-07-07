@@ -1,12 +1,12 @@
 /**
- * @file InternetMessage.cpp
+ * @file MessageHeaders.cpp
  *
- * This module contains the implementation of the InternetMessage::InternetMessage class.
+ * This module contains the implementation of the MessageHeaders::MessageHeaders class.
  *
  * © 2018 by Richard Walters
  */
 
-#include <InternetMessage/InternetMessage.hpp>
+#include <MessageHeaders/MessageHeaders.hpp>
 #include <sstream>
 #include <string>
 
@@ -15,8 +15,12 @@ namespace {
     /**
      * These are the characters that are considered whitespace and
      * should be stripped off by the Strip() function.
+     *
+     * Name of "WSP" chosen to match the symbol name from
+     * RFC 5322 (https://tools.ietf.org/html/rfc5322) which refers
+     * to this specific character set.
      */
-    constexpr const char* WHITESPACE = " \r\n\t";
+    const std::string WSP = " \t";
 
     /**
      * This function returns a copy of the given string, with any whitespace
@@ -29,8 +33,8 @@ namespace {
      *     The stripped string is returned.
      */
     std::string StripMarginWhitespace(const std::string& s) {
-        const auto marginLeft = s.find_first_not_of(WHITESPACE);
-        const auto marginRight = s.find_last_not_of(WHITESPACE);
+        const auto marginLeft = s.find_first_not_of(WSP);
+        const auto marginRight = s.find_last_not_of(WSP);
         if (marginLeft == std::string::npos) {
             return "";
         } else {
@@ -40,9 +44,9 @@ namespace {
 
 }
 
-namespace InternetMessage {
+namespace MessageHeaders {
 
-    InternetMessage::Header::Header(
+    MessageHeaders::Header::Header(
         const HeaderName& newName,
         const HeaderValue& newValue
     )
@@ -52,9 +56,9 @@ namespace InternetMessage {
     }
 
     /**
-     * This contains the private properties of a InternetMessage instance.
+     * This contains the private properties of a MessageHeaders instance.
      */
-    struct InternetMessage::Impl {
+    struct MessageHeaders::Impl {
         /**
          * These are the headers of the message.
          */
@@ -66,14 +70,14 @@ namespace InternetMessage {
         std::string body;
     };
 
-    InternetMessage::~InternetMessage() = default;
+    MessageHeaders::~MessageHeaders() = default;
 
-    InternetMessage::InternetMessage()
+    MessageHeaders::MessageHeaders()
         : impl_(new Impl)
     {
     }
 
-    bool InternetMessage::ParseRawMessage(const std::string& rawMessage) {
+    bool MessageHeaders::ParseRawMessage(const std::string& rawMessage) {
         size_t offset = 0;
         while(offset < rawMessage.length()) {
             auto lineTerminator = rawMessage.find("\r\n", offset);
@@ -102,14 +106,31 @@ namespace InternetMessage {
                     return false;
                 }
             }
-            value = StripMarginWhitespace(
-                rawMessage.substr(
-                    nameValueDelimiter + 1,
-                    lineTerminator - nameValueDelimiter - 1
-                )
+            value = rawMessage.substr(
+                nameValueDelimiter + 1,
+                lineTerminator - nameValueDelimiter - 1
             );
-            impl_->headers.emplace_back(name, value);
             offset = lineTerminator + 2;
+            for(;;) {
+                const auto nextLineStart = lineTerminator + 2;
+                auto nextLineTerminator = rawMessage.find("\r\n", nextLineStart);
+                if (nextLineTerminator == std::string::npos) {
+                    break;
+                }
+                const auto nextLineLength = nextLineTerminator - nextLineStart;
+                if (
+                    (nextLineLength > 2)
+                    && (WSP.find(rawMessage[nextLineStart]) != std::string::npos)
+                ) {
+                    value += rawMessage.substr(nextLineStart, nextLineLength);
+                    offset = nextLineTerminator + 2;
+                    lineTerminator = nextLineTerminator;
+                } else {
+                    break;
+                }
+            }
+            value = StripMarginWhitespace(value);
+            impl_->headers.emplace_back(name, value);
         }
         impl_->body = rawMessage.substr(offset);
         bool lastCR = false;
@@ -130,11 +151,11 @@ namespace InternetMessage {
         return true;
     }
 
-    auto InternetMessage::GetHeaders() const -> Headers {
+    auto MessageHeaders::GetAll() const -> Headers {
         return impl_->headers;
     }
 
-    bool InternetMessage::HasHeader(const HeaderName& name) const {
+    bool MessageHeaders::HasHeader(const HeaderName& name) const {
         for (const auto& header: impl_->headers) {
             if (header.name == name) {
                 return true;
@@ -143,7 +164,7 @@ namespace InternetMessage {
         return false;
     }
 
-    auto InternetMessage::GetHeaderValue(const HeaderName& name) const -> HeaderValue {
+    auto MessageHeaders::GetHeaderValue(const HeaderName& name) const -> HeaderValue {
         for (const auto& header: impl_->headers) {
             if (header.name == name) {
                 return header.value;
@@ -152,11 +173,11 @@ namespace InternetMessage {
         return "FeelsBadMan";
     }
 
-    std::string InternetMessage::GetBody() const {
+    std::string MessageHeaders::GetBody() const {
         return impl_->body;
     }
 
-    std::string InternetMessage::GenerateRawMessage() const {
+    std::string MessageHeaders::GenerateRawMessage() const {
         std::ostringstream rawMessage;
         for (const auto& header: impl_->headers) {
             rawMessage << header.name << ": " << header.value << "\r\n";

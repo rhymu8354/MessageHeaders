@@ -1,10 +1,10 @@
-#ifndef INTERNET_MESSAGE_HPP
-#define INTERNET_MESSAGE_HPP
+#ifndef MESSAGE_HEADERS_HPP
+#define MESSAGE_HEADERS_HPP
 
 /**
- * @file InternetMessage.hpp
+ * @file MessageHeaders.hpp
  *
- * This module declares the InternetMessage::InternetMessage class.
+ * This module declares the MessageHeaders::MessageHeaders class.
  *
  * © 2018 by Richard Walters
  */
@@ -13,27 +13,30 @@
 #include <string>
 #include <vector>
 
-namespace InternetMessage {
+namespace MessageHeaders {
 
     /**
-     * This class represents an InternetMessage,
-     * as defined in RFC 2822 (https://tools.ietf.org/html/rfc2822).
+     * This class represents the headers of a message on the internet,
+     * which is a common theme amongst several internet standards:
+     * - e-mail: RFC 5322 (https://tools.ietf.org/html/rfc5322)
+     * - HTTP (web): RFC 7230 (https://tools.ietf.org/html/rfc7320)
+     * - SIP (VoIP): RFC 3261 (https://tools.ietf.org/html/3261)
      */
-    class InternetMessage {
+    class MessageHeaders {
         // Types
     public:
         /**
-         * This is how we handle the name of a internet message header.
+         * This is how we handle the name of a message header.
          */
         typedef std::string HeaderName;
 
         /**
-         * This is how we handle the value of a internet message header.
+         * This is how we handle the value of a message header.
          */
         typedef std::string HeaderValue;
 
         /**
-         * This represents a single header of the internet message.
+         * This represents a single header of the message.
          */
         struct Header {
             // Properties
@@ -73,24 +76,24 @@ namespace InternetMessage {
 
         /**
          * This represents the collection of all headers of
-         * the internet message.
+         * the message.
          */
         typedef std::vector< Header > Headers;
 
         // Lifecycle management
     public:
-        ~InternetMessage();
-        InternetMessage(const InternetMessage&) = delete;
-        InternetMessage(InternetMessage&&) = delete;
-        InternetMessage& operator=(const InternetMessage&) = delete;
-        InternetMessage& operator=(InternetMessage&&) = delete;
+        ~MessageHeaders();
+        MessageHeaders(const MessageHeaders&) = delete;
+        MessageHeaders(MessageHeaders&&) = delete;
+        MessageHeaders& operator=(const MessageHeaders&) = delete;
+        MessageHeaders& operator=(MessageHeaders&&) = delete;
 
         // Public methods
     public:
         /**
          * This is the default constructor.
          */
-        InternetMessage();
+        MessageHeaders();
 
         /**
          * This method determines the headers and body
@@ -113,7 +116,7 @@ namespace InternetMessage {
          *     The collection of headers attached
          *     to the message is returned.
          */
-        Headers GetHeaders() const;
+        Headers GetAll() const;
 
         /**
          * This method checks to see if there is a header in the message
@@ -157,11 +160,11 @@ namespace InternetMessage {
 
         /**
          * This method constructs and returns the raw string
-         * internet message based on the headers and body that have been
+         * message based on the headers and body that have been
          * collected in the object.
          *
          * @return
-         *     The raw string internet message based on the headers and body
+         *     The raw string message based on the headers and body
          *     that have been collected in the object is returned.
          */
         std::string GenerateRawMessage() const;
@@ -183,4 +186,4 @@ namespace InternetMessage {
 
 }
 
-#endif /* INTERNET_MESSAGE_HPP */
+#endif /* MESSAGE_HEADERS_HPP */

@@ -1,27 +1,27 @@
 /**
- * @file InternetMessageTests.cpp
+ * @file MessageHeadersTests.cpp
  *
  * This module contains the unit tests of the
- * InternetMessage::InternetMessage class.
+ * MessageHeaders::MessageHeaders class.
  *
  * © 2018 by Richard Walters
  */
 
 #include <gtest/gtest.h>
-#include <InternetMessage/InternetMessage.hpp>
+#include <MessageHeaders/MessageHeaders.hpp>
 #include <string>
 #include <vector>
 
-TEST(InternetMessageTests, HttpClientRequestMessage) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, HttpClientRequestMessage) {
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    const auto headers = msg.GetHeaders();
+    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    const auto headerCollection = headers.GetAll();
     struct ExpectedHeader {
         std::string name;
         std::string value;
@@ -31,19 +31,19 @@ TEST(InternetMessageTests, HttpClientRequestMessage) {
         {"Host", "www.example.com"},
         {"Accept-Language", "en, mi"},
     };
-    ASSERT_EQ(expectedHeaders.size(), headers.size());
+    ASSERT_EQ(expectedHeaders.size(), headerCollection.size());
     for (size_t i = 0; i < expectedHeaders.size(); ++i) {
-        ASSERT_EQ(expectedHeaders[i].name, headers[i].name);
-        ASSERT_EQ(expectedHeaders[i].value, headers[i].value);
+        ASSERT_EQ(expectedHeaders[i].name, headerCollection[i].name);
+        ASSERT_EQ(expectedHeaders[i].value, headerCollection[i].value);
     }
-    ASSERT_TRUE(msg.HasHeader("Host"));
-    ASSERT_FALSE(msg.HasHeader("Foobar"));
-    ASSERT_EQ("", msg.GetBody());
-    ASSERT_EQ(rawMessage, msg.GenerateRawMessage());
+    ASSERT_TRUE(headers.HasHeader("Host"));
+    ASSERT_FALSE(headers.HasHeader("Foobar"));
+    ASSERT_EQ("", headers.GetBody());
+    ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
 }
 
-TEST(InternetMessageTests, HttpServerResponseMessage) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, HttpServerResponseMessage) {
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "Date: Mon, 27 Jul 2009 12:28:53 GMT\r\n"
         "Server: Apache\r\n"
@@ -56,8 +56,8 @@ TEST(InternetMessageTests, HttpServerResponseMessage) {
         "\r\n"
         "Hello World! My payload includes a trailing CRLF.\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    const auto headers = msg.GetHeaders();
+    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    const auto headerCollection = headers.GetAll();
     struct ExpectedHeader {
         std::string name;
         std::string value;
@@ -72,19 +72,19 @@ TEST(InternetMessageTests, HttpServerResponseMessage) {
         {"Vary", "Accept-Encoding"},
         {"Content-Type", "text/plain"},
     };
-    ASSERT_EQ(expectedHeaders.size(), headers.size());
+    ASSERT_EQ(expectedHeaders.size(), headerCollection.size());
     for (size_t i = 0; i < expectedHeaders.size(); ++i) {
-        ASSERT_EQ(expectedHeaders[i].name, headers[i].name);
-        ASSERT_EQ(expectedHeaders[i].value, headers[i].value);
+        ASSERT_EQ(expectedHeaders[i].name, headerCollection[i].name);
+        ASSERT_EQ(expectedHeaders[i].value, headerCollection[i].value);
     }
-    ASSERT_TRUE(msg.HasHeader("Last-Modified"));
-    ASSERT_FALSE(msg.HasHeader("Foobar"));
-    ASSERT_EQ("Hello World! My payload includes a trailing CRLF.\r\n", msg.GetBody());
-    ASSERT_EQ(rawMessage, msg.GenerateRawMessage());
+    ASSERT_TRUE(headers.HasHeader("Last-Modified"));
+    ASSERT_FALSE(headers.HasHeader("Foobar"));
+    ASSERT_EQ("Hello World! My payload includes a trailing CRLF.\r\n", headers.GetBody());
+    ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
 }
 
-TEST(InternetMessageTests, HeaderLineAlmostTooLong) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, HeaderLineAlmostTooLong) {
+    MessageHeaders::MessageHeaders headers;
     const std::string testHeaderName("X-Poggers");
     const std::string testHeaderNameWithDelimiters = testHeaderName + ": ";
     const std::string longestPossiblePoggers(998 - testHeaderNameWithDelimiters.length(), 'X');
@@ -95,12 +95,12 @@ TEST(InternetMessageTests, HeaderLineAlmostTooLong) {
         + "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ(longestPossiblePoggers, msg.GetHeaderValue(testHeaderName));
+    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(longestPossiblePoggers, headers.GetHeaderValue(testHeaderName));
 }
 
-TEST(InternetMessageTests, HeaderLineTooLong) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, HeaderLineTooLong) {
+    MessageHeaders::MessageHeaders msg;
     const std::string testHeaderName("X-Poggers");
     const std::string testHeaderNameWithDelimiters = testHeaderName + ": ";
     const std::string valueIsTooLong(999 - testHeaderNameWithDelimiters.length(), 'X');
@@ -114,8 +114,8 @@ TEST(InternetMessageTests, HeaderLineTooLong) {
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }
 
-TEST(InternetMessageTests, GetValueOfMissingHeader) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, GetValueOfMissingHeader) {
+    MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -126,8 +126,8 @@ TEST(InternetMessageTests, GetValueOfMissingHeader) {
     ASSERT_EQ("FeelsBadMan", msg.GetHeaderValue("PePe"));
 }
 
-TEST(InternetMessageTests, HeaderWithNonAsciiCharacterInName) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
+    MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -138,8 +138,8 @@ TEST(InternetMessageTests, HeaderWithNonAsciiCharacterInName) {
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }
 
-TEST(InternetMessageTests, BodyWithLoneCRInMiddle) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, BodyWithLoneCRInMiddle) {
+    MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -150,8 +150,8 @@ TEST(InternetMessageTests, BodyWithLoneCRInMiddle) {
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }
 
-TEST(InternetMessageTests, BodyWithLoneCRAtEnd) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, BodyWithLoneCRAtEnd) {
+    MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -162,8 +162,8 @@ TEST(InternetMessageTests, BodyWithLoneCRAtEnd) {
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }
 
-TEST(InternetMessageTests, BodyWithLoneLF) {
-    InternetMessage::InternetMessage msg;
+TEST(MessageHeadersTests, BodyWithLoneLF) {
+    MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -172,4 +172,18 @@ TEST(InternetMessageTests, BodyWithLoneLF) {
         "admiralB\nadmiralEmo"
     );
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+}
+
+TEST(MessageHeadersTests, FoldedHeaderValue) {
+    MessageHeaders::MessageHeaders msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "Subject: This\r\n"
+        " is a test\r\n"
+        "\r\n"
+    );
+    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
+    ASSERT_EQ("This is a test", msg.GetHeaderValue("Subject"));
 }
