@@ -265,3 +265,22 @@ TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
         ++index;
     }
 }
+
+TEST(MessageHeadersTests, HeaderNamesShouldBeCaseInsensive) {
+    struct TestVector {
+        std::string headerName;
+        std::vector< std::string > shouldAlsoMatch;
+    };
+    std::vector< TestVector > testVectors{
+        {"Content-Type", {"content-type", "CONTENT-TYPE", "Content-type", "CoNtENt-TYpe"}},
+        {"ETag", {"etag", "ETAG", "Etag", "eTag", "etaG"}},
+    };
+    size_t index = 0;
+    for (const auto& testVector: testVectors) {
+        MessageHeaders::MessageHeaders msg;
+        msg.SetHeader(testVector.headerName, "HeyGuys");
+        for (const auto& alternative: testVector.shouldAlsoMatch) {
+            ASSERT_TRUE(msg.HasHeader(alternative));
+        }
+    }
+}
