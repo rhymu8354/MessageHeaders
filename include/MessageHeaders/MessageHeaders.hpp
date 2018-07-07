@@ -301,8 +301,8 @@ namespace MessageHeaders {
         std::vector< HeaderValue > GetHeaderMultiValue(const HeaderName& name) const;
 
         /**
-         * This method add or replace the header with the given name,
-         * to have the given.
+         * This method adds or replaces the header with the given name,
+         * to have the given value.
          *
          * @param[in] name
          *     This is the name of the header to add or replace.
