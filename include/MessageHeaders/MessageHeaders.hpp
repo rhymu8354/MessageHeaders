@@ -149,22 +149,12 @@ namespace MessageHeaders {
         HeaderValue GetHeaderValue(const HeaderName& name) const;
 
         /**
-         * This method returns the part of the message that follows
-         * all the headers, and represents the principal content
-         * of the overall message.
-         *
-         * @return
-         *     The body of the message is returned.
-         */
-        std::string GetBody() const;
-
-        /**
          * This method constructs and returns the raw string
-         * message based on the headers and body that have been
+         * message based on the headers that have been
          * collected in the object.
          *
          * @return
-         *     The raw string message based on the headers and body
+         *     The raw string message based on the headers
          *     that have been collected in the object is returned.
          */
         std::string GenerateRawMessage() const;

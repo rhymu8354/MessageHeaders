@@ -38,7 +38,6 @@ TEST(MessageHeadersTests, HttpClientRequestMessage) {
     }
     ASSERT_TRUE(headers.HasHeader("Host"));
     ASSERT_FALSE(headers.HasHeader("Foobar"));
-    ASSERT_EQ("", headers.GetBody());
     ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
 }
 
@@ -79,7 +78,6 @@ TEST(MessageHeadersTests, HttpServerResponseMessage) {
     }
     ASSERT_TRUE(headers.HasHeader("Last-Modified"));
     ASSERT_FALSE(headers.HasHeader("Foobar"));
-    ASSERT_EQ("Hello World! My payload includes a trailing CRLF.\r\n", headers.GetBody());
     ASSERT_EQ(rawMessage, headers.GenerateRawMessage());
 }
 
@@ -134,42 +132,6 @@ TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
         "Feels Bad Man: LUL\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
-    );
-    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
-}
-
-TEST(MessageHeadersTests, BodyWithLoneCRInMiddle) {
-    MessageHeaders::MessageHeaders msg;
-    const std::string rawMessage = (
-        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
-        "Host: www.example.com\r\n"
-        "Accept-Language: en, mi\r\n"
-        "\r\n"
-        "admiralB\radmiralEmo"
-    );
-    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
-}
-
-TEST(MessageHeadersTests, BodyWithLoneCRAtEnd) {
-    MessageHeaders::MessageHeaders msg;
-    const std::string rawMessage = (
-        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
-        "Host: www.example.com\r\n"
-        "Accept-Language: en, mi\r\n"
-        "\r\n"
-        "admiralBadmiralEmo\r"
-    );
-    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
-}
-
-TEST(MessageHeadersTests, BodyWithLoneLF) {
-    MessageHeaders::MessageHeaders msg;
-    const std::string rawMessage = (
-        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
-        "Host: www.example.com\r\n"
-        "Accept-Language: en, mi\r\n"
-        "\r\n"
-        "admiralB\nadmiralEmo"
     );
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }

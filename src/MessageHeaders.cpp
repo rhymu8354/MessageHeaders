@@ -63,11 +63,6 @@ namespace MessageHeaders {
          * These are the headers of the message.
          */
         Headers headers;
-
-        /**
-         * This is the body of the message.
-         */
-        std::string body;
     };
 
     MessageHeaders::~MessageHeaders() = default;
@@ -132,22 +127,6 @@ namespace MessageHeaders {
             value = StripMarginWhitespace(value);
             impl_->headers.emplace_back(name, value);
         }
-        impl_->body = rawMessage.substr(offset);
-        bool lastCR = false;
-        for (auto c: impl_->body) {
-            if (c == '\r') {
-                lastCR = true;
-            } else if (
-                (c == '\n') == !lastCR
-            ) {
-                return false;
-            } else {
-                lastCR = false;
-            }
-        }
-        if (lastCR) {
-            return false;
-        }
         return true;
     }
 
@@ -173,17 +152,12 @@ namespace MessageHeaders {
         return "FeelsBadMan";
     }
 
-    std::string MessageHeaders::GetBody() const {
-        return impl_->body;
-    }
-
     std::string MessageHeaders::GenerateRawMessage() const {
         std::ostringstream rawMessage;
         for (const auto& header: impl_->headers) {
             rawMessage << header.name << ": " << header.value << "\r\n";
         }
         rawMessage << "\r\n";
-        rawMessage << impl_->body;
         return rawMessage.str();
     }
 
