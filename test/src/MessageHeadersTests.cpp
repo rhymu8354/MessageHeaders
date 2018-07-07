@@ -195,7 +195,7 @@ TEST(MessageHeadersTests, GetValueOfMissingHeader) {
         "\r\n"
     );
     ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ("FeelsBadMan", msg.GetHeaderValue("PePe"));
+    ASSERT_EQ("", msg.GetHeaderValue("PePe"));
 }
 
 TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
@@ -294,4 +294,47 @@ TEST(MessageHeadersTests, HeaderNamesShouldBeCaseInsensive) {
             ASSERT_TRUE(msg.HasHeader(alternative));
         }
     }
+}
+
+TEST(MessageHeadersTests, GetHeaderMultipleValues) {
+    const std::string rawMessage = (
+        "Via: SIP/2.0/UDP server10.biloxi.com\r\n"
+        "    ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n"
+        "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com\r\n"
+        "    ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n"
+        "Via: SIP/2.0/UDP pc33.atlanta.com\r\n"
+        "    ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "\r\n"
+    );
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+        "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+        "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1",
+        headers.GetHeaderValue("Via")
+    );
+    ASSERT_EQ(
+        (std::vector< MessageHeaders::MessageHeaders::HeaderValue >{
+            "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+        }),
+        headers.GetHeaderMultiValue("Via")
+    );
+    ASSERT_EQ(
+        "Bob <sip:bob@biloxi.com>;tag=a6c85cf",
+        headers.GetHeaderValue("To")
+    );
+    ASSERT_EQ(
+        (std::vector< MessageHeaders::MessageHeaders::HeaderValue >{
+            "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
+        }),
+        headers.GetHeaderMultiValue("To")
+    );
+    ASSERT_EQ(
+        (std::vector< MessageHeaders::MessageHeaders::HeaderValue >{}),
+        headers.GetHeaderMultiValue("PogChamp")
+    );
 }
