@@ -49,6 +49,30 @@ namespace {
     }
 
     /**
+     * This function determines whether or not one string ends with another.
+     *
+     * @param[in] s
+     *     This is the string to check and see if it ends with
+     *     the other string.
+     *
+     * @param[in] e
+     *     This is the string to look for on the end of the first string.
+     *
+     * @return
+     *     An indication of whether or not one string ends with another
+     *     is returned.
+     */
+    bool EndsWith(
+        const std::string& s,
+        const std::string& e
+    ) {
+        return (
+            (s.length() < e.length())
+            || (s.substr(s.length() - e.length()) != e)
+        );
+    }
+
+    /**
      * This is the type of function that is used as the strategy to
      * determine where to break a long string into two smaller strings.
      *
@@ -132,10 +156,7 @@ namespace {
                 part = continuator;
             }
             part += input.substr(currentLineStart, breakOffset - currentLineStart);
-            if (
-                (part.length() < terminator.length())
-                || (part.substr(part.length() - terminator.length()) != terminator)
-            ) {
+            if (EndsWith(part, terminator)) {
                 part += terminator;
             }
             output.push_back(part);
