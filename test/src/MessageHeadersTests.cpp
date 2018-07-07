@@ -147,6 +147,45 @@ TEST(MessageHeadersTests, GetValueOfPresentHeader) {
     ASSERT_EQ("www.example.com", msg.GetHeaderValue("Host"));
 }
 
+TEST(MessageHeadersTests, SetHeaderAdd) {
+    MessageHeaders::MessageHeaders msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
+    msg.SetHeader("X", "PogChamp");
+    ASSERT_EQ(
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "X: PogChamp\r\n"
+        "\r\n",
+        msg.GenerateRawHeaders()
+    );
+}
+
+TEST(MessageHeadersTests, SetHeaderReplace) {
+    MessageHeaders::MessageHeaders msg;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
+    msg.SetHeader("Host", "example.com");
+    ASSERT_EQ(
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: example.com\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n",
+        msg.GenerateRawHeaders()
+    );
+}
+
 TEST(MessageHeadersTests, GetValueOfMissingHeader) {
     MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
