@@ -73,6 +73,25 @@ namespace {
     }
 
     /**
+     * This function determines whether or not the given character
+     * is an invisible ASCII character (e.g. space or control character).
+     *
+     * @param[in] c
+     *     This is the character to test.
+     *
+     * @return
+     *     An indication of whether or not the given character is an
+     *     invisible ASCII character (e.g. space or control character)
+     *     is returned.
+     */
+    bool IsInvisibleAscii(char c) {
+        return (
+            (c < 33)
+            || (c > 126)
+        );
+    }
+
+    /**
      * This is the type of function that is used as the strategy to
      * determine where to break a long string into two smaller strings.
      *
@@ -275,10 +294,7 @@ namespace MessageHeaders {
             HeaderValue value;
             name = rawMessage.substr(offset, nameValueDelimiter - offset);
             for (auto c: name) {
-                if (
-                    (c < 33)
-                    || (c > 126)
-                ) {
+                if (IsInvisibleAscii(c)) {
                     return false;
                 }
             }
