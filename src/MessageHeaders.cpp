@@ -216,6 +216,127 @@ namespace {
         return output;
     }
 
+    /**
+     * This method takes a substring in a raw internet message
+     * corresponding to a single header line, determines where
+     * the name and value of the header are, and extracts them.
+     *
+     * @param[in] rawMessage
+     *     This is the string containing the header line.
+     *
+     * @paraam[in] lineStart
+     *     This is the offset into rawMessage where the header
+     *     line begins.
+     *
+     * @param[in] lineEnd
+     *     This is the offset into rawMessage where the header
+     *     line ends.
+     *
+     * @param[out] name
+     *     This is where to store the extracted header name.
+     *
+     * @param[out] value
+     *     This is where to store the extracted header value.
+     *
+     * @return
+     *     An indication of whether or not the header name and
+     *     value were extracted successfully is returned.
+     */
+    bool SeparateHeaderNameAndValue(
+        const std::string& rawMessage,
+        size_t lineStart,
+        size_t lineEnd,
+        MessageHeaders::MessageHeaders::HeaderName& name,
+        MessageHeaders::MessageHeaders::HeaderValue& value
+    ) {
+        auto nameValueDelimiter = rawMessage.find(':', lineStart);
+        if (nameValueDelimiter == std::string::npos) {
+            return false;
+        }
+        name = rawMessage.substr(lineStart, nameValueDelimiter - lineStart);
+        for (auto c: name) {
+            if (IsInvisibleAscii(c)) {
+                return false;
+            }
+        }
+        value = rawMessage.substr(
+            nameValueDelimiter + 1,
+            lineEnd - nameValueDelimiter - 1
+        );
+        return true;
+    }
+
+    /**
+     * This function looks ahead in a raw internet message,
+     * and for each line that begins with whitespace, it "unfolds"
+     * the line and given header value, combining them.
+     *
+     * The given offset and lineTerminator positions into
+     * the raw message are advanced past any unfolded lines.
+     *
+     * @param[in] rawMessage
+     *     This is the string containing the message.
+     *
+     * @paraam[in] offset
+     *     This is the current position into rawMessage where
+     *     we should look for lines to potentially unfold
+     *     into the given header value.
+     *
+     * @param[in] lineTerminator
+     *     This is the position of the end of the current line.
+     *
+     * @param[in,out] value
+     *     This is the last header value parsed from the message.
+     *     If any lines are unfolded, they are added to this value.
+     *
+     * @return
+     *     An indication of whether or not the advancing
+     *     and unfolding were successful is returned.
+     */
+    bool AdvanceAndUnfold(
+        const std::string& rawMessage,
+        size_t& offset,
+        size_t& lineTerminator,
+        MessageHeaders::MessageHeaders::HeaderValue& value
+    ) {
+        for(;;) {
+            // Find where the next line begins.
+            const auto nextLineStart = lineTerminator + CRLF.length();
+
+            // Find where the next line ends.
+            auto nextLineTerminator = rawMessage.find(CRLF, nextLineStart);
+            if (nextLineTerminator == std::string::npos) {
+                return false;
+            }
+
+            // Calculate the next line's length.
+            auto nextLineLength = nextLineTerminator - nextLineStart;
+
+            // If the next line begins with whitespace, unfold the line
+            if (
+                (nextLineLength > CRLF.length())
+                && (WSP.find(rawMessage[nextLineStart]) != std::string::npos)
+            ) {
+                // Append a single space to the header value.
+                value += ' ';
+
+                // Remove leading whitespace from the next line.
+                const auto firstNonWhitespaceInNextLine = rawMessage.find_first_not_of(WSP, nextLineStart);
+                nextLineLength -= (firstNonWhitespaceInNextLine - nextLineStart);
+
+                // Concatenate the rest of the next line to the header value.
+                value += rawMessage.substr(firstNonWhitespaceInNextLine, nextLineLength);
+
+                // Move to the line following the next line.
+                offset = nextLineTerminator + CRLF.length();
+                lineTerminator = nextLineTerminator;
+            } else {
+                break;
+            }
+        }
+        return true;
+    }
+
 }
 
 namespace MessageHeaders {
@@ -241,11 +362,11 @@ namespace MessageHeaders {
         return name_;
     }
 
-    auto MessageHeaders::HeaderName::begin() const {
+    std::string::const_iterator MessageHeaders::HeaderName::begin() const {
         return name_.begin();
     }
 
-    auto MessageHeaders::HeaderName::end() const {
+    std::string::const_iterator MessageHeaders::HeaderName::end() const {
         return name_.end();
     }
 
@@ -302,7 +423,7 @@ namespace MessageHeaders {
                 breakOffset = startOffset;
                 const auto reservedCharacters = 2 + (*firstPart ? 0 : 1);
                 for (size_t i = startOffset; i <= startOffset + lineLengthLimit - reservedCharacters; ++i) {
-                    if ((s[i] == ' ') || (s[i] == '\t')) {
+                    if (WSP.find(s[i]) != std::string::npos) {
                         if (*firstPart) {
                             *firstPart = false;
                         } else {
@@ -336,57 +457,58 @@ namespace MessageHeaders {
     ) {
         size_t offset = 0;
         while(offset < rawMessage.length()) {
+            // Find the end of the current line.
             auto lineTerminator = rawMessage.find(CRLF, offset);
             if (lineTerminator == std::string::npos) {
                 break;
             }
+
+            // Bail if the line is longer than the limit (if set).
             if (impl_->lineLengthLimit > 0) {
                 if (lineTerminator + CRLF.length() - offset > impl_->lineLengthLimit) {
                     return false;
                 }
             }
+
+            // Stop if empty line is found -- this is where
+            // the headers end and the body (which we don't parse,
+            // but leave up to the user to handle) begins.
             if (lineTerminator == offset) {
                 offset += CRLF.length();
                 break;
             }
-            auto nameValueDelimiter = rawMessage.find(':', offset);
-            if (nameValueDelimiter == std::string::npos) {
-                return false;
-            }
+
+            // Separate the header name from the header value.
             HeaderName name;
             HeaderValue value;
-            name = rawMessage.substr(offset, nameValueDelimiter - offset);
-            for (auto c: name) {
-                if (IsInvisibleAscii(c)) {
-                    return false;
-                }
+            if (
+                !SeparateHeaderNameAndValue(
+                    rawMessage,
+                    offset,
+                    lineTerminator,
+                    name,
+                    value
+                )
+            ) {
+                return false;
             }
-            value = rawMessage.substr(
-                nameValueDelimiter + 1,
-                lineTerminator - nameValueDelimiter - 1
-            );
+
+            // Look ahead in the raw message and perform
+            // line unfolding if we see any lines that begin with whitespace.
             offset = lineTerminator + CRLF.length();
-            for(;;) {
-                const auto nextLineStart = lineTerminator + CRLF.length();
-                auto nextLineTerminator = rawMessage.find(CRLF, nextLineStart);
-                if (nextLineTerminator == std::string::npos) {
-                    break;
-                }
-                auto nextLineLength = nextLineTerminator - nextLineStart;
-                if (
-                    (nextLineLength > CRLF.length())
-                    && (WSP.find(rawMessage[nextLineStart]) != std::string::npos)
-                ) {
-                    value += ' ';
-                    const auto firstNonWhitespaceInNextLine = rawMessage.find_first_not_of(WSP, nextLineStart);
-                    nextLineLength -= (firstNonWhitespaceInNextLine - nextLineStart);
-                    value += rawMessage.substr(firstNonWhitespaceInNextLine, nextLineLength);
-                    offset = nextLineTerminator + CRLF.length();
-                    lineTerminator = nextLineTerminator;
-                } else {
-                    break;
-                }
+            if (
+                !AdvanceAndUnfold(
+                    rawMessage,
+                    offset,
+                    lineTerminator,
+                    value
+                )
+            ) {
+                return false;
             }
+
+            // Remove any whitespace that might be at the beginning
+            // or end of the header value, and then store the header.
             value = StripMarginWhitespace(value);
             impl_->headers.emplace_back(name, value);
         }
