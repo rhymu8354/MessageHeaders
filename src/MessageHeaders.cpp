@@ -63,6 +63,13 @@ namespace MessageHeaders {
          * These are the headers of the message.
          */
         Headers headers;
+
+        /**
+         * This is the maximum number of characters, including
+         * the 2-character CRLF line terminator, that should
+         * be allowed for a single header line.
+         */
+        size_t lineLengthLimit = 0;
     };
 
     MessageHeaders::~MessageHeaders() = default;
@@ -70,6 +77,10 @@ namespace MessageHeaders {
     MessageHeaders::MessageHeaders()
         : impl_(new Impl)
     {
+    }
+
+    void MessageHeaders::SetLineLimit(size_t newLineLengthLimit) {
+        impl_->lineLengthLimit = newLineLengthLimit;
     }
 
     bool MessageHeaders::ParseRawMessage(
@@ -82,8 +93,10 @@ namespace MessageHeaders {
             if (lineTerminator == std::string::npos) {
                 break;
             }
-            if (lineTerminator - offset > 998) {
-                return false;
+            if (impl_->lineLengthLimit > 0) {
+                if (lineTerminator - offset + 2 > impl_->lineLengthLimit) {
+                    return false;
+                }
             }
             if (lineTerminator == offset) {
                 offset += 2;

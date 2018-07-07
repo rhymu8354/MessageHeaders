@@ -96,6 +96,17 @@ namespace MessageHeaders {
         MessageHeaders();
 
         /**
+         * This method sets a limit for the number of characters
+         * in any header line.
+         *
+         * @param[in] newLineLengthLimit
+         *     This is the maximum number of characters, including
+         *     the 2-character CRLF line terminator, that should
+         *     be allowed for a single header line.
+         */
+        void SetLineLimit(size_t newLineLengthLimit);
+
+        /**
          * This method determines the headers and body
          * of the message by parsing the raw message from a string.
          *
