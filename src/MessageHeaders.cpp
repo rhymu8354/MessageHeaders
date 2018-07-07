@@ -188,6 +188,27 @@ namespace {
 
 namespace MessageHeaders {
 
+    MessageHeaders::HeaderName::HeaderName(const std::string& s)
+        : name_(s)
+    {
+    }
+
+    bool MessageHeaders::HeaderName::operator==(const HeaderName& rhs) const noexcept {
+        return name_ == rhs.name_;
+    }
+
+    MessageHeaders::HeaderName::operator const std::string&() const noexcept {
+        return name_;
+    }
+
+    auto MessageHeaders::HeaderName::begin() const {
+        return name_.begin();
+    }
+
+    auto MessageHeaders::HeaderName::end() const {
+        return name_.end();
+    }
+
     MessageHeaders::Header::Header(
         const HeaderName& newName,
         const HeaderValue& newValue
@@ -390,6 +411,27 @@ namespace MessageHeaders {
         }
         rawMessage << CRLF;
         return rawMessage.str();
+    }
+
+    std::ostream& operator<<(
+        std::ostream& stream,
+        const MessageHeaders::HeaderName& name
+    ) {
+        return stream << (std::string)name;
+    }
+
+    bool operator==(
+        const std::string& lhs,
+        const MessageHeaders::HeaderName& rhs
+    ) {
+        return rhs == lhs;
+    }
+
+    void PrintTo(
+        const MessageHeaders::HeaderName& name,
+        std::ostream* os
+    ) {
+        *os << name;
     }
 
 }

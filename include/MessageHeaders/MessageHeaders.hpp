@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <string>
+#include <ostream>
 #include <vector>
 
 namespace MessageHeaders {
@@ -28,7 +29,90 @@ namespace MessageHeaders {
         /**
          * This is how we handle the name of a message header.
          */
-        typedef std::string HeaderName;
+        class HeaderName {
+            // Lifecycle Management
+        public:
+            ~HeaderName() = default;
+            HeaderName(const HeaderName& s) = default;
+            HeaderName(HeaderName&& s) = default;
+            HeaderName& operator=(const HeaderName&) = default;
+            HeaderName& operator=(HeaderName&&) = default;
+
+            // Public Methods
+        public:
+            /**
+             * This is the default constructor.
+             */
+            HeaderName() = default;
+
+            /**
+             * This constructs the header name based on a normal C++ string.
+             *
+             * @param[in] s
+             *     This is the name to set for the header name.
+             */
+            HeaderName(const std::string& s);
+
+            /**
+             * This constructs the header name based on a normal C string.
+             *
+             * @param[in] s
+             *     This is the name to set for the header name.
+             */
+            HeaderName(const char* s)
+                : name_(s)
+            {
+            }
+
+            /**
+             * This is the equality operator for the class.
+             *
+             * @param[in] rhs
+             *     This is the other header name with which to compare.
+             *
+             * @return
+             *     An indication of whether or not the two header names
+             *     are equivalent (case-insensitive) is returned.
+             */
+            bool operator==(const HeaderName& rhs) const noexcept;
+
+            /**
+             * This is the typecast operator to C++ string.
+             *
+             * @return
+             *     The C++ string rendering of the header name is returned.
+             */
+            operator const std::string&() const noexcept;
+
+            /**
+             * This method is used in range-for constructs, to get
+             * the beginning iterator of the sequence.  It's merely
+             * going to forward to the underlying C++ string holding
+             * the name text.
+             *
+             * @return
+             *     The beginning iterator of the sequence is returned.
+             */
+            auto begin() const;
+
+            /**
+             * This method is used in range-for constructs, to get
+             * the ending iterator of the sequence.  It's merely
+             * going to forward to the underlying C++ string holding
+             * the name text.
+             *
+             * @return
+             *     The ending iterator of the sequence is returned.
+             */
+            auto end() const;
+
+            // Private Properties
+        private:
+            /**
+             * This is the content of the header name.
+             */
+            std::string name_;
+        };
 
         /**
          * This is how we handle the value of a message header.
@@ -220,6 +304,59 @@ namespace MessageHeaders {
          */
         std::unique_ptr< struct Impl > impl_;
     };
+
+    /**
+     * This is a support function for the MessageHeaders::HeaderName class.
+     * It's used when header names are shifted out to output streams.
+     *
+     * @param[in] stream
+     *     This is the stream to which we are shifting out the header name.
+     *
+     * @param[in] name
+     *     This is the header name to shift out.
+     *
+     * @return
+     *     The output stream is returned in order to support operation chaining.
+     */
+    std::ostream& operator<<(
+        std::ostream& stream,
+        const MessageHeaders::HeaderName& name
+    );
+
+    /**
+     * This is a support function for the MessageHeaders::HeaderName class.
+     * It's used when comparing a string to a header name, and the string
+     * is on the left-hand side of the operation.
+     *
+     * @param[in] lhs
+     *     This is the string to compare with the header name.
+     *
+     * @param[in] rhs
+     *     This is the header name to compare with the string.
+     *
+     * @return
+     *     An indication of whether or not the string and header name
+     *     are equivalent (case-insensitive) is returned.
+     */
+    bool operator==(
+        const std::string& lhs,
+        const MessageHeaders::HeaderName& rhs
+    );
+
+    /**
+     * This is a support function for Google Test to print out
+     * values of the MessageHeaders::HeaderName class.
+     *
+     * @param[in] name
+     *     This is the header name to print.
+     *
+     * @param[in] os
+     *     This points to the stream to which to print the name.
+     */
+    void PrintTo(
+        const MessageHeaders::HeaderName& name,
+        std::ostream* os
+    );
 
 }
 
