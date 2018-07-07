@@ -210,7 +210,7 @@ TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
     ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
 }
 
-TEST(MessageHeadersTests, FoldedHeaderValue) {
+TEST(MessageHeadersTests, HeaderValueUnfolding) {
     MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
