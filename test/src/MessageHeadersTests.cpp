@@ -223,3 +223,45 @@ TEST(MessageHeadersTests, HeaderValueUnfolding) {
     ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
     ASSERT_EQ("This is a test", msg.GetHeaderValue("Subject"));
 }
+
+TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
+    const std::string headerName = "X";
+    struct TestVector {
+        std::string headerValue;
+        std::vector< std::string > expectedLines;
+    };
+    std::vector< TestVector > testVectors{
+        // ....................... {"..........", "..........", ".........."}}
+        {"Hello!",                {"X: Hello!",                               ""}},
+        {"Hello!!",               {"X: Hello!!",                              ""}},
+        {"Hello!!!",              {                                           ""}},
+        {"Hello, World!",         {"X: Hello," , " World!",                   ""}},
+        {"This is even longer!",  {"X: This is", " even",      " longer!",    ""}},
+        {"This is even long er!", {"X: This is", " even long", " er!",        ""}},
+        {"This is evenlonger!",   {                                           ""}},
+        {"sadfjkasdfjlkasdfjla",  {                                           ""}},
+    };
+    size_t index = 0;
+    for (const auto& testVector: testVectors) {
+        MessageHeaders::MessageHeaders msg;
+        msg.SetLineLimit(12);
+        msg.SetHeader(headerName, testVector.headerValue);
+        const auto rawHeaders = msg.GenerateRawHeaders();
+        std::vector< std::string > actualLines;
+        size_t offset = 0;
+        while(offset < rawHeaders.length()) {
+            auto lineTerminator = rawHeaders.find("\r\n", offset);
+            if (lineTerminator == std::string::npos) {
+                break;
+            }
+            const auto line = rawHeaders.substr(
+                offset,
+                lineTerminator - offset
+            );
+            actualLines.push_back(line);
+            offset = lineTerminator + 2;
+        }
+        ASSERT_EQ(testVector.expectedLines, actualLines) << index;
+        ++index;
+    }
+}
