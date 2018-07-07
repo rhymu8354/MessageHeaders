@@ -338,3 +338,128 @@ TEST(MessageHeadersTests, GetHeaderMultipleValues) {
         headers.GetHeaderMultiValue("PogChamp")
     );
 }
+
+TEST(MessageHeadersTests, SetHeaderMultipleValues) {
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > via{
+        "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+        "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+        "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+    };
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > to{
+        "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
+    };
+    MessageHeaders::MessageHeaders headers;
+    headers.SetHeader("Via", via, true);
+    headers.SetHeader("To", to, true);
+    headers.SetHeader("FeelsBadMan", {}, true);
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+    headers = MessageHeaders::MessageHeaders();
+    headers.SetHeader("Via", via, false);
+    headers.SetHeader("To", to, false);
+    headers.SetHeader("FeelsBadMan", {}, false);
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n"
+        "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n"
+        "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+}
+
+TEST(MessageHeadersTests, SetHeaderShouldReplaceAllPreviousValues) {
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > via{
+        "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+        "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+        "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+    };
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > to{
+        "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
+    };
+    MessageHeaders::MessageHeaders headers;
+    headers.SetHeader("Via", via, true);
+    headers.SetHeader("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
+    headers.SetHeader("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+    headers.AddHeader("Via", "Trickster");
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n"
+        "Via: Trickster\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+    headers.SetHeader("Via", "Kappa");
+    ASSERT_EQ(
+        "Via: Kappa\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+}
+
+TEST(MessageHeadersTests, AddHeader) {
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > via{
+        "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+        "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+        "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+    };
+    MessageHeaders::MessageHeaders headers;
+    headers.SetHeader("Via", via, true);
+    headers.SetHeader("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+    headers.AddHeader("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+    std::vector< MessageHeaders::MessageHeaders::HeaderValue > x_pepe{
+        "<3",
+        "SeemsGood",
+    };
+    headers.AddHeader("X-PePe", x_pepe, true);
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n"
+        "X-PePe: <3,SeemsGood\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+    headers.AddHeader("To", {"Carol"}, true);
+    ASSERT_EQ(
+        "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n"
+        "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n"
+        "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n"
+        "X-PePe: <3,SeemsGood\r\n"
+        "To: Carol\r\n"
+        "\r\n",
+        headers.GenerateRawHeaders()
+    );
+}

@@ -74,6 +74,37 @@ namespace {
     }
 
     /**
+     * This function returns a single string which contains
+     * all the given strings, with a copy of the given delimiter
+     * placed between each original string.
+     *
+     * @param[in] strings
+     *     These are the strings to combine.
+     *
+     * @param[in] delimiter
+     *     This is the string to place between each original string.
+     *
+     * @return
+     *     The combined string is returned.
+     */
+    std::string CombineStrings(
+        const std::vector< std::string >& strings,
+        const std::string& delimiter
+    ) {
+        bool isFirstValue = true;
+        std::string composite;
+        for (const auto& s: strings) {
+            if (isFirstValue) {
+                isFirstValue = false;
+            } else {
+                composite += delimiter;
+            }
+            composite += s;
+        }
+        return composite;
+    }
+
+    /**
      * This function determines whether or not the given character
      * is an invisible ASCII character (e.g. space or control character).
      *
@@ -411,13 +442,73 @@ namespace MessageHeaders {
         const HeaderName& name,
         const HeaderValue& value
     ) {
-        for (auto& header: impl_->headers) {
-            if (header.name == name) {
-                header.value = value;
-                return;
+        bool haveSetValues = false;
+        for (
+            auto header = impl_->headers.begin();
+            header != impl_->headers.end();
+        ) {
+            if (header->name == name) {
+                if (haveSetValues) {
+                    header = impl_->headers.erase(header);
+                } else {
+                    header->value = value;
+                    ++header;
+                    haveSetValues = true;
+                }
+            } else {
+                ++header;
             }
         }
+        if (!haveSetValues) {
+            AddHeader(name, value);
+        }
+    }
+
+    void MessageHeaders::SetHeader(
+        const HeaderName& name,
+        const std::vector< HeaderValue >& values,
+        bool oneLine
+    ) {
+        if (values.empty()) {
+            return;
+        }
+        if (oneLine) {
+            SetHeader(name, CombineStrings(values, ","));
+        } else {
+            bool isFirstValue = true;
+            for (const auto& value: values) {
+                if (isFirstValue) {
+                    isFirstValue = false;
+                    SetHeader(name, value);
+                } else {
+                    AddHeader(name, value);
+                }
+            }
+        }
+    }
+
+    void MessageHeaders::AddHeader(
+        const HeaderName& name,
+        const HeaderValue& value
+    ) {
         impl_->headers.emplace_back(name, value);
+    }
+
+    void MessageHeaders::AddHeader(
+        const HeaderName& name,
+        const std::vector< HeaderValue >& values,
+        bool oneLine
+    ) {
+        if (values.empty()) {
+            return;
+        }
+        if (oneLine) {
+            AddHeader(name, CombineStrings(values, ","));
+        } else {
+            for (const auto& value: values) {
+                AddHeader(name, value);
+            }
+        }
     }
 
     std::string MessageHeaders::GenerateRawHeaders() const {
