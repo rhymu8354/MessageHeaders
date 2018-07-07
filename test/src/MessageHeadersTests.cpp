@@ -231,7 +231,7 @@ TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
         std::vector< std::string > expectedLines;
     };
     std::vector< TestVector > testVectors{
-        // ....................... {"..........", "..........", ".........."}}
+        // ...................... {"..........", "..........", "..........",  ""}}
         {"Hello!",                {"X: Hello!",                               ""}},
         {"Hello!!",               {"X: Hello!!",                              ""}},
         {"Hello!!!",              {                                           ""}},
