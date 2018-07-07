@@ -231,15 +231,15 @@ TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
         std::vector< std::string > expectedLines;
     };
     std::vector< TestVector > testVectors{
-        // ...................... {"..........", "..........", "..........",  ""}}
-        {"Hello!",                {"X: Hello!",                               ""}},
-        {"Hello!!",               {"X: Hello!!",                              ""}},
-        {"Hello!!!",              {                                           ""}},
-        {"Hello, World!",         {"X: Hello," , " World!",                   ""}},
-        {"This is even longer!",  {"X: This is", " even",      " longer!",    ""}},
-        {"This is even long er!", {"X: This is", " even long", " er!",        ""}},
-        {"This is evenlonger!",   {                                           ""}},
-        {"sadfjkasdfjlkasdfjla",  {                                           ""}},
+        // ...................... {"..........", "..........", "..........", ""}}
+        {"Hello!",                {"X: Hello!" ,                             ""}},
+        {"Hello!!",               {"X: Hello!!",                             ""}},
+        {"Hello!!!",              {                                          ""}},
+        {"Hello, World!",         {"X: Hello," , " World!"   ,               ""}},
+        {"This is even longer!",  {"X: This is", " even"     , " longer!"  , ""}},
+        {"This is even long er!", {"X: This is", " even long", " er!"      , ""}},
+        {"This is evenlonger!",   {                                          ""}},
+        {"sadfjkasdfjlkasdfjla",  {                                          ""}},
     };
     size_t index = 0;
     for (const auto& testVector: testVectors) {
