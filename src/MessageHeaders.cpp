@@ -520,10 +520,10 @@ namespace MessageHeaders {
             impl_->headers.emplace_back(name, value);
         }
         if (offset == 0) {
-            return Validity::InvalidRecoverable;
+            return Validity::ValidIncomplete;
         }
         bodyOffset = offset;
-        return Validity::Valid;
+        return Validity::ValidComplete;
     }
 
     auto MessageHeaders::ParseRawMessage(const std::string& rawMessage) -> Validity {
@@ -706,8 +706,11 @@ namespace MessageHeaders {
         std::ostream* os
     ) {
         switch (validity) {
-            case MessageHeaders::Validity::Valid: {
-                *os << "VALID";
+            case MessageHeaders::Validity::ValidComplete: {
+                *os << "VALID (complete)";
+            } break;
+            case MessageHeaders::Validity::ValidIncomplete: {
+                *os << "VALID (incomplete)";
             } break;
             case MessageHeaders::Validity::InvalidRecoverable: {
                 *os << "INVALID (recoverable)";

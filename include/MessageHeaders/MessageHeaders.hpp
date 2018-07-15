@@ -32,19 +32,25 @@ namespace MessageHeaders {
          */
         enum class Validity {
             /**
-             * good headers
+             * Headers are good.
              */
-            Valid,
+            ValidComplete,
 
             /**
-             * bad headers, but it may be possible to parse
+             * Headers are good so far, but ran out of data early;
+             * try parsing again when more data is available.
+             */
+            ValidIncomplete,
+
+            /**
+             * Headers are bad, but it may be possible to parse
              * valid headers in the same stream where the bad headers
              * were found.
              */
             InvalidRecoverable,
 
             /**
-             * bad headers, and it isn't possible to parse
+             * Headers are bad, and it isn't possible to parse
              * valid headers in the same stream where the bad headers
              * were found.
              */
