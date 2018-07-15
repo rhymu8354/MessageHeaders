@@ -497,7 +497,7 @@ namespace MessageHeaders {
                     value
                 )
             ) {
-                return Validity::InvalidUnrecoverable;
+                return Validity::InvalidRecoverable;
             }
 
             // Look ahead in the raw message and perform

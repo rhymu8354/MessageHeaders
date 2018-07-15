@@ -279,7 +279,7 @@ TEST(MessageHeadersTests, HeaderWithNotPermittedCharacterInName) {
     );
     size_t messageEnd = std::numeric_limits< size_t >::max();
     ASSERT_EQ(
-        MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
+        MessageHeaders::MessageHeaders::Validity::InvalidRecoverable,
         headers.ParseRawMessage(rawMessage, messageEnd)
     );
     ASSERT_EQ(0, messageEnd);
