@@ -20,7 +20,10 @@ TEST(MessageHeadersTests, HttpClientRequestMessage) {
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
     const auto headerCollection = headers.GetAll();
     struct ExpectedHeader {
         std::string name;
@@ -59,7 +62,10 @@ TEST(MessageHeadersTests, HttpServerResponseMessage) {
         + "Hello World! My payload includes a trailing CRLF.\r\n"
     );
     size_t bodyOffset;
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage, bodyOffset));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage, bodyOffset)
+    );
     ASSERT_EQ(rawHeaders.length(), bodyOffset);
     const auto headerCollection = headers.GetAll();
     struct ExpectedHeader {
@@ -99,7 +105,10 @@ TEST(MessageHeadersTests, HeaderLineAlmostTooLong) {
         + "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
     ASSERT_EQ(longestPossiblePoggers, headers.GetHeaderValue(testHeaderName));
 }
 
@@ -116,7 +125,25 @@ TEST(MessageHeadersTests, HeaderLineTooLong) {
         + "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_FALSE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
+        headers.ParseRawMessage(rawMessage)
+    );
+}
+
+TEST(MessageHeadersTests, HeaderLineTooLongAndNotTerminated) {
+    MessageHeaders::MessageHeaders headers;
+    headers.SetLineLimit(1000);
+    const std::string testHeaderName("X-Poggers");
+    const std::string testHeaderNameWithDelimiters = testHeaderName + ": ";
+    const std::string valueIsTooLong(999 - testHeaderNameWithDelimiters.length(), 'X');
+    const std::string rawMessage = (
+        testHeaderNameWithDelimiters + valueIsTooLong
+    );
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
+        headers.ParseRawMessage(rawMessage)
+    );
 }
 
 TEST(MessageHeadersTests, HeaderLineOver1000CharactersAllowedByDefault) {
@@ -131,91 +158,115 @@ TEST(MessageHeadersTests, HeaderLineOver1000CharactersAllowedByDefault) {
         + "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
     ASSERT_EQ(valueForHeaderLineLongerThan1000Characters, headers.GetHeaderValue(testHeaderName));
 }
 
 TEST(MessageHeadersTests, EmptyMessage) {
     MessageHeaders::MessageHeaders headers;
-    ASSERT_FALSE(headers.ParseRawMessage(""));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::InvalidRecoverable,
+        headers.ParseRawMessage("")
+    );
 }
 
 TEST(MessageHeadersTests, SingleTruncatedLine) {
     MessageHeaders::MessageHeaders headers;
-    ASSERT_FALSE(headers.ParseRawMessage("User-Agent: curl"));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::InvalidRecoverable,
+        headers.ParseRawMessage("User-Agent: curl")
+    );
 }
 
 TEST(MessageHeadersTests, NoHeadersAtAll) {
     MessageHeaders::MessageHeaders headers;
-    ASSERT_TRUE(headers.ParseRawMessage("\r\n"));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage("\r\n")
+    );
     ASSERT_TRUE(headers.GetAll().empty());
 }
 
 TEST(MessageHeadersTests, GetValueOfPresentHeader) {
-    MessageHeaders::MessageHeaders msg;
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ("www.example.com", msg.GetHeaderValue("Host"));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    ASSERT_EQ("www.example.com", headers.GetHeaderValue("Host"));
 }
 
 TEST(MessageHeadersTests, SetHeaderAdd) {
-    MessageHeaders::MessageHeaders msg;
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    msg.SetHeader("X", "PogChamp");
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    headers.SetHeader("X", "PogChamp");
     ASSERT_EQ(
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "X: PogChamp\r\n"
         "\r\n",
-        msg.GenerateRawHeaders()
+        headers.GenerateRawHeaders()
     );
 }
 
 TEST(MessageHeadersTests, SetHeaderReplace) {
-    MessageHeaders::MessageHeaders msg;
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    msg.SetHeader("Host", "example.com");
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    headers.SetHeader("Host", "example.com");
     ASSERT_EQ(
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n",
-        msg.GenerateRawHeaders()
+        headers.GenerateRawHeaders()
     );
 }
 
 TEST(MessageHeadersTests, GetValueOfMissingHeader) {
-    MessageHeaders::MessageHeaders msg;
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ("", msg.GetHeaderValue("PePe"));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    ASSERT_EQ("", headers.GetHeaderValue("PePe"));
 }
 
-TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
-    MessageHeaders::MessageHeaders msg;
+TEST(MessageHeadersTests, HeaderWithNotPermittedCharacterInName) {
+    MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -223,11 +274,14 @@ TEST(MessageHeadersTests, HeaderWithNonAsciiCharacterInName) {
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
-    ASSERT_FALSE(msg.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
+        headers.ParseRawMessage(rawMessage)
+    );
 }
 
 TEST(MessageHeadersTests, HeaderValueUnfolding) {
-    MessageHeaders::MessageHeaders msg;
+    MessageHeaders::MessageHeaders headers;
     std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -236,9 +290,12 @@ TEST(MessageHeadersTests, HeaderValueUnfolding) {
         " is a test\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ("This is a test", msg.GetHeaderValue("Subject"));
-    msg = MessageHeaders::MessageHeaders();
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    ASSERT_EQ("This is a test", headers.GetHeaderValue("Subject"));
+    headers = MessageHeaders::MessageHeaders();
     rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
         "Host: www.example.com\r\n"
@@ -247,8 +304,11 @@ TEST(MessageHeadersTests, HeaderValueUnfolding) {
         "    is a test\r\n"
         "\r\n"
     );
-    ASSERT_TRUE(msg.ParseRawMessage(rawMessage));
-    ASSERT_EQ("This is a test", msg.GetHeaderValue("Subject"));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
+    ASSERT_EQ("This is a test", headers.GetHeaderValue("Subject"));
 }
 
 TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
@@ -270,10 +330,10 @@ TEST(MessageHeadersTests, FoldLineThatWouldExceedLimit) {
     };
     size_t index = 0;
     for (const auto& testVector: testVectors) {
-        MessageHeaders::MessageHeaders msg;
-        msg.SetLineLimit(12);
-        msg.SetHeader(headerName, testVector.headerValue);
-        const auto rawHeaders = msg.GenerateRawHeaders();
+        MessageHeaders::MessageHeaders headers;
+        headers.SetLineLimit(12);
+        headers.SetHeader(headerName, testVector.headerValue);
+        const auto rawHeaders = headers.GenerateRawHeaders();
         std::vector< std::string > actualLines;
         size_t offset = 0;
         while(offset < rawHeaders.length()) {
@@ -304,10 +364,10 @@ TEST(MessageHeadersTests, HeaderNamesShouldBeCaseInsensive) {
     };
     size_t index = 0;
     for (const auto& testVector: testVectors) {
-        MessageHeaders::MessageHeaders msg;
-        msg.SetHeader(testVector.headerName, "HeyGuys");
+        MessageHeaders::MessageHeaders headers;
+        headers.SetHeader(testVector.headerName, "HeyGuys");
         for (const auto& alternative: testVector.shouldAlsoMatch) {
-            ASSERT_TRUE(msg.HasHeader(alternative));
+            ASSERT_TRUE(headers.HasHeader(alternative));
         }
     }
 }
@@ -324,7 +384,10 @@ TEST(MessageHeadersTests, GetHeaderMultipleValues) {
         "\r\n"
     );
     MessageHeaders::MessageHeaders headers;
-    ASSERT_TRUE(headers.ParseRawMessage(rawMessage));
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::Valid,
+        headers.ParseRawMessage(rawMessage)
+    );
     ASSERT_EQ(
         "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,"
         "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,"

@@ -27,6 +27,31 @@ namespace MessageHeaders {
         // Types
     public:
         /**
+         * These are the different validity states
+         * that the message headers can have.
+         */
+        enum class Validity {
+            /**
+             * good headers
+             */
+            Valid,
+
+            /**
+             * bad headers, but it may be possible to parse
+             * valid headers in the same stream where the bad headers
+             * were found.
+             */
+            InvalidRecoverable,
+
+            /**
+             * bad headers, and it isn't possible to parse
+             * valid headers in the same stream where the bad headers
+             * were found.
+             */
+            InvalidUnrecoverable,
+        };
+
+        /**
          * This is how we handle the name of a message header.
          */
         class HeaderName {
@@ -213,10 +238,11 @@ namespace MessageHeaders {
          *     if any, begins.
          *
          * @return
-         *     An indication of whether or not the message was
-         *     parsed successfully is returned.
+         *     An indication of the validity of
+         *     the headers and the stream from which the headers
+         *     were parsed is returned.
          */
-        bool ParseRawMessage(
+        Validity ParseRawMessage(
             const std::string& rawMessage,
             size_t& bodyOffset
         );
@@ -239,10 +265,11 @@ namespace MessageHeaders {
          *     This is the string rendering of the message to parse.
          *
          * @return
-         *     An indication of whether or not the message was
-         *     parsed successfully is returned.
+         *     An indication of the validity of
+         *     the headers and the stream from which the headers
+         *     were parsed is returned.
          */
-        bool ParseRawMessage(const std::string& rawMessage);
+        Validity ParseRawMessage(const std::string& rawMessage);
 
         /**
          * This method returns the collection of headers attached
@@ -455,6 +482,21 @@ namespace MessageHeaders {
      */
     void PrintTo(
         const MessageHeaders::HeaderName& name,
+        std::ostream* os
+    );
+
+    /**
+     * This is a support function for Google Test to print out
+     * values of the MessageHeaders::Validity class.
+     *
+     * @param[in] validity
+     *     This is the validity value to print.
+     *
+     * @param[in] os
+     *     This points to the stream to which to print the validity value.
+     */
+    void PrintTo(
+        const MessageHeaders::Validity& validity,
         std::ostream* os
     );
 
