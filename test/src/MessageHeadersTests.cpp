@@ -176,11 +176,19 @@ TEST(MessageHeadersTests, EmptyMessage) {
     );
 }
 
-TEST(MessageHeadersTests, SingleTruncatedLine) {
+TEST(MessageHeadersTests, SingleLineTruncated) {
     MessageHeaders::MessageHeaders headers;
     ASSERT_EQ(
         MessageHeaders::MessageHeaders::Validity::ValidIncomplete,
         headers.ParseRawMessage("User-Agent: curl")
+    );
+}
+
+TEST(MessageHeadersTests, SingleLineNotTruncated) {
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::Validity::ValidIncomplete,
+        headers.ParseRawMessage("User-Agent: curl\r\n")
     );
 }
 

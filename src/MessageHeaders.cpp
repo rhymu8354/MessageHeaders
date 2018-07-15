@@ -511,7 +511,7 @@ namespace MessageHeaders {
                     value
                 )
             ) {
-                return Validity::InvalidRecoverable;
+                return Validity::ValidIncomplete;
             }
 
             // Remove any whitespace that might be at the beginning
