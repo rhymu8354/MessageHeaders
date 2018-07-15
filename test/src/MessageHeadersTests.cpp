@@ -8,6 +8,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <limits>
 #include <MessageHeaders/MessageHeaders.hpp>
 #include <string>
 #include <vector>
@@ -140,10 +141,12 @@ TEST(MessageHeadersTests, HeaderLineTooLongAndNotTerminated) {
     const std::string rawMessage = (
         testHeaderNameWithDelimiters + valueIsTooLong
     );
+    size_t messageEnd = std::numeric_limits< size_t >::max();
     ASSERT_EQ(
         MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
-        headers.ParseRawMessage(rawMessage)
+        headers.ParseRawMessage(rawMessage, messageEnd)
     );
+    ASSERT_EQ(0, messageEnd);
 }
 
 TEST(MessageHeadersTests, HeaderLineOver1000CharactersAllowedByDefault) {
@@ -274,10 +277,12 @@ TEST(MessageHeadersTests, HeaderWithNotPermittedCharacterInName) {
         "Accept-Language: en, mi\r\n"
         "\r\n"
     );
+    size_t messageEnd = std::numeric_limits< size_t >::max();
     ASSERT_EQ(
         MessageHeaders::MessageHeaders::Validity::InvalidUnrecoverable,
-        headers.ParseRawMessage(rawMessage)
+        headers.ParseRawMessage(rawMessage, messageEnd)
     );
+    ASSERT_EQ(0, messageEnd);
 }
 
 TEST(MessageHeadersTests, HeaderValueUnfolding) {

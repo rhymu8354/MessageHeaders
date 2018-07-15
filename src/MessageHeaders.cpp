@@ -455,6 +455,7 @@ namespace MessageHeaders {
         const std::string& rawMessage,
         size_t& bodyOffset
     ) -> Validity {
+        bodyOffset = 0;
         size_t offset = 0;
         while(offset < rawMessage.length()) {
             // Find the end of the current line.
