@@ -135,6 +135,22 @@ TEST(MessageHeadersTests, HeaderLineOver1000CharactersAllowedByDefault) {
     ASSERT_EQ(valueForHeaderLineLongerThan1000Characters, headers.GetHeaderValue(testHeaderName));
 }
 
+TEST(MessageHeadersTests, EmptyMessage) {
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_FALSE(headers.ParseRawMessage(""));
+}
+
+TEST(MessageHeadersTests, SingleTruncatedLine) {
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_FALSE(headers.ParseRawMessage("User-Agent: curl"));
+}
+
+TEST(MessageHeadersTests, NoHeadersAtAll) {
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_TRUE(headers.ParseRawMessage("\r\n"));
+    ASSERT_TRUE(headers.GetAll().empty());
+}
+
 TEST(MessageHeadersTests, GetValueOfPresentHeader) {
     MessageHeaders::MessageHeaders msg;
     const std::string rawMessage = (

@@ -512,6 +512,9 @@ namespace MessageHeaders {
             value = StripMarginWhitespace(value);
             impl_->headers.emplace_back(name, value);
         }
+        if (offset == 0) {
+            return false;
+        }
         bodyOffset = offset;
         return true;
     }
