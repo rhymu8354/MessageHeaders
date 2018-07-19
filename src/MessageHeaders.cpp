@@ -397,6 +397,12 @@ namespace MessageHeaders {
          */
         size_t lineLengthLimit = 0;
 
+        /**
+         * This indicates whether or not all validity checks
+         * have passed for the headers.
+         */
+        bool valid = true;
+
         // Methods
 
         /**
@@ -451,10 +457,14 @@ namespace MessageHeaders {
         impl_->lineLengthLimit = newLineLengthLimit;
     }
 
+    bool MessageHeaders::IsValid() const {
+        return impl_->valid;
+    }
+
     auto MessageHeaders::ParseRawMessage(
         const std::string& rawMessage,
         size_t& bodyOffset
-    ) -> Validity {
+    ) -> State {
         bodyOffset = 0;
         size_t offset = 0;
         while(offset < rawMessage.length()) {
@@ -464,7 +474,8 @@ namespace MessageHeaders {
                 if (impl_->lineLengthLimit > 0) {
                     const auto unterminatedLineLength = rawMessage.length() - offset;
                     if (unterminatedLineLength + 2 > impl_->lineLengthLimit) {
-                        return Validity::InvalidUnrecoverable;
+                        impl_->valid = false;
+                        return State::Error;
                     }
                 }
                 break;
@@ -473,7 +484,8 @@ namespace MessageHeaders {
             // Bail if the line is longer than the limit (if set).
             if (impl_->lineLengthLimit > 0) {
                 if (lineTerminator + CRLF.length() - offset > impl_->lineLengthLimit) {
-                    return Validity::InvalidUnrecoverable;
+                    impl_->valid = false;
+                    return State::Error;
                 }
             }
 
@@ -497,7 +509,7 @@ namespace MessageHeaders {
                     value
                 )
             ) {
-                return Validity::InvalidRecoverable;
+                impl_->valid = false;
             }
 
             // Look ahead in the raw message and perform
@@ -511,7 +523,8 @@ namespace MessageHeaders {
                     value
                 )
             ) {
-                return Validity::ValidIncomplete;
+                bodyOffset = offset;
+                return State::Incomplete;
             }
 
             // Remove any whitespace that might be at the beginning
@@ -519,14 +532,14 @@ namespace MessageHeaders {
             value = StripMarginWhitespace(value);
             impl_->headers.emplace_back(name, value);
         }
-        if (offset == 0) {
-            return Validity::ValidIncomplete;
-        }
         bodyOffset = offset;
-        return Validity::ValidComplete;
+        if (offset == 0) {
+            return State::Incomplete;
+        }
+        return State::Complete;
     }
 
-    auto MessageHeaders::ParseRawMessage(const std::string& rawMessage) -> Validity {
+    auto MessageHeaders::ParseRawMessage(const std::string& rawMessage) -> State {
         size_t bodyOffset;
         return ParseRawMessage(rawMessage, bodyOffset);
     }
@@ -702,21 +715,18 @@ namespace MessageHeaders {
     }
 
     void PrintTo(
-        const MessageHeaders::Validity& validity,
+        const MessageHeaders::State& state,
         std::ostream* os
     ) {
-        switch (validity) {
-            case MessageHeaders::Validity::ValidComplete: {
-                *os << "VALID (complete)";
+        switch (state) {
+            case MessageHeaders::State::Complete: {
+                *os << "Complete";
             } break;
-            case MessageHeaders::Validity::ValidIncomplete: {
-                *os << "VALID (incomplete)";
+            case MessageHeaders::State::Incomplete: {
+                *os << "Incomplete";
             } break;
-            case MessageHeaders::Validity::InvalidRecoverable: {
-                *os << "INVALID (recoverable)";
-            } break;
-            case MessageHeaders::Validity::InvalidUnrecoverable: {
-                *os << "INVALID (not recoverable)";
+            case MessageHeaders::State::Error: {
+                *os << "ERROR";
             } break;
             default: {
                 *os << "???";

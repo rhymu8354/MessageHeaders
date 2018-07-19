@@ -27,34 +27,24 @@ namespace MessageHeaders {
         // Types
     public:
         /**
-         * These are the different validity states
+         * These are the different states
          * that the message headers can have.
          */
-        enum class Validity {
+        enum class State {
             /**
-             * Headers are good.
+             * End of headers not yet found.
              */
-            ValidComplete,
+            Incomplete,
 
             /**
-             * Headers are good so far, but ran out of data early;
-             * try parsing again when more data is available.
+             * End of headers found.
              */
-            ValidIncomplete,
+            Complete,
 
             /**
-             * Headers are bad, but it may be possible to parse
-             * valid headers in the same stream where the bad headers
-             * were found.
+             * Unrecoverable error; reject input.
              */
-            InvalidRecoverable,
-
-            /**
-             * Headers are bad, and it isn't possible to parse
-             * valid headers in the same stream where the bad headers
-             * were found.
-             */
-            InvalidUnrecoverable,
+            Error,
         };
 
         /**
@@ -222,6 +212,16 @@ namespace MessageHeaders {
         void SetLineLimit(size_t newLineLengthLimit);
 
         /**
+         * This method returns an indication of whether or not
+         * the headers constructed so far have all been valid.
+         *
+         * @return
+         *     An indication of whether or not the headers
+         *     constructed so far have all been valid is returned.
+         */
+        bool IsValid() const;
+
+        /**
          * This method determines the headers and body
          * of the message by parsing the raw message from a string.
          *
@@ -244,11 +244,11 @@ namespace MessageHeaders {
          *     if any, begins.
          *
          * @return
-         *     An indication of the validity of
+         *     An indication of the state of the parsing of
          *     the headers and the stream from which the headers
          *     were parsed is returned.
          */
-        Validity ParseRawMessage(
+        State ParseRawMessage(
             const std::string& rawMessage,
             size_t& bodyOffset
         );
@@ -271,11 +271,11 @@ namespace MessageHeaders {
          *     This is the string rendering of the message to parse.
          *
          * @return
-         *     An indication of the validity of
+         *     An indication of the state of the parsing of
          *     the headers and the stream from which the headers
          *     were parsed is returned.
          */
-        Validity ParseRawMessage(const std::string& rawMessage);
+        State ParseRawMessage(const std::string& rawMessage);
 
         /**
          * This method returns the collection of headers attached
@@ -493,16 +493,17 @@ namespace MessageHeaders {
 
     /**
      * This is a support function for Google Test to print out
-     * values of the MessageHeaders::Validity class.
+     * values of the MessageHeaders::State class.
      *
-     * @param[in] validity
-     *     This is the validity value to print.
+     * @param[in] State
+     *     This is the message headers state value to print.
      *
      * @param[in] os
-     *     This points to the stream to which to print the validity value.
+     *     This points to the stream to which to print
+     *     the message headers state value.
      */
     void PrintTo(
-        const MessageHeaders::Validity& validity,
+        const MessageHeaders::State& state,
         std::ostream* os
     );
 
