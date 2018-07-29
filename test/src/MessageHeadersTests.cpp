@@ -611,3 +611,30 @@ TEST(MessageHeadersTests, RemoveHeader) {
         headers.GenerateRawHeaders()
     );
 }
+
+TEST(MessageHeadersTests, GetHeaderTokens) {
+    const std::string rawMessage = (
+        "Foo: bar, spam,  hello\r\n"
+        "Bar: foo\r\n"
+        "\r\n"
+    );
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage(rawMessage)
+    );
+    ASSERT_EQ(
+        (std::vector< std::string >{
+            "bar",
+            "spam",
+            "hello",
+        }),
+        headers.GetHeaderTokens("Foo")
+    );
+    ASSERT_EQ(
+        (std::vector< std::string >{
+            "foo",
+        }),
+        headers.GetHeaderTokens("Bar")
+    );
+}

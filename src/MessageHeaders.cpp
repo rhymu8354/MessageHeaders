@@ -50,6 +50,36 @@ namespace {
     }
 
     /**
+     * This function separates the tokens in a string.
+     *
+     * @param[in] s
+     *     This is the string to split into tokens.
+     *
+     * @param[in,out] tokens
+     *     This is where to put the tokens split from the string.
+     *     The new tokens are pushed onto the end.
+     *
+     * @return
+     *     The list of tokens split from the string is returned.
+     */
+    void SplitTokens(
+        const std::string& s,
+        std::vector< std::string >& tokens
+    ) {
+        auto remainder = StripMarginWhitespace(s);
+        while (!remainder.empty()) {
+            auto delimiter = remainder.find_first_of(',');
+            if (delimiter == std::string::npos) {
+                tokens.push_back(remainder);
+                remainder.clear();
+            } else {
+                tokens.push_back(StripMarginWhitespace(remainder.substr(0, delimiter)));
+                remainder = StripMarginWhitespace(remainder.substr(delimiter + 1));
+            }
+        }
+    }
+
+    /**
      * This function determines whether or not one string ends with another.
      *
      * @param[in] s
@@ -581,6 +611,14 @@ namespace MessageHeaders {
             }
         }
         return values;
+    }
+
+    auto MessageHeaders::GetHeaderTokens(const HeaderName& name) const -> std::vector< HeaderValue > {
+        std::vector< HeaderValue > tokens;
+        for (const auto tokenGroup: GetHeaderMultiValue(name)) {
+            SplitTokens(tokenGroup, tokens);
+        }
+        return tokens;
     }
 
     void MessageHeaders::SetHeader(

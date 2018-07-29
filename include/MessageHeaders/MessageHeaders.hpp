@@ -333,6 +333,25 @@ namespace MessageHeaders {
          */
         std::vector< HeaderValue > GetHeaderMultiValue(const HeaderName& name) const;
 
+
+        /**
+         * This method returns the sequence of tokens extracted from the header
+         * with the given name in the message.
+         *
+         * @param[in] name
+         *     This is the name of the header whose values should be returned
+         *     as a sequence of tokens.
+         *
+         * @return
+         *     A sequence of tokens extracted from the values of the given
+         *     header are returned.
+         *
+         * @retval {}
+         *     This is returned if there is no header with the given name
+         *     in the message.
+         */
+        std::vector< HeaderValue > GetHeaderTokens(const HeaderName& name) const;
+
         /**
          * This method adds or replaces the header with the given name,
          * to have the given value.
