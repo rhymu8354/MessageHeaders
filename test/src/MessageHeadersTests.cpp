@@ -616,6 +616,7 @@ TEST(MessageHeadersTests, GetHeaderTokens) {
     const std::string rawMessage = (
         "Foo: bar, spam,  hello\r\n"
         "Bar: foo\r\n"
+        "Spam:   \t  \r\n"
         "\r\n"
     );
     MessageHeaders::MessageHeaders headers;
@@ -636,5 +637,10 @@ TEST(MessageHeadersTests, GetHeaderTokens) {
             "foo",
         }),
         headers.GetHeaderTokens("Bar")
+    );
+    ASSERT_EQ(
+        (std::vector< std::string >{
+        }),
+        headers.GetHeaderTokens("Spam")
     );
 }
