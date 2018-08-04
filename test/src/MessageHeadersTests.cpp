@@ -614,8 +614,8 @@ TEST(MessageHeadersTests, RemoveHeader) {
 
 TEST(MessageHeadersTests, GetHeaderTokens) {
     const std::string rawMessage = (
-        "Foo: bar, spam,  hello\r\n"
-        "Bar: foo\r\n"
+        "Foo: bar, Spam,  heLLo\r\n"
+        "Bar: Foo \r\n"
         "Spam:   \t  \r\n"
         "\r\n"
     );

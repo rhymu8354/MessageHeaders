@@ -50,6 +50,25 @@ namespace {
     }
 
     /**
+     * This function takes a string and swaps all upper-case characters
+     * with their lower-case equivalents, returning the result.
+     *
+     * @param[in] inString
+     *     This is the string to be normalized.
+     *
+     * @return
+     *     The normalized string is returned.  All upper-case characters
+     *     are replaced with their lower-case equivalents.
+     */
+    std::string NormalizeCaseInsensitiveString(const std::string& inString) {
+        std::string outString;
+        for (char c: inString) {
+            outString.push_back(tolower(c));
+        }
+        return outString;
+    }
+
+    /**
      * This function separates the tokens in a string.
      *
      * @param[in] s
@@ -70,11 +89,13 @@ namespace {
         while (!remainder.empty()) {
             auto delimiter = remainder.find_first_of(',');
             if (delimiter == std::string::npos) {
-                tokens.push_back(remainder);
+                tokens.push_back(NormalizeCaseInsensitiveString(remainder));
                 remainder.clear();
             } else {
                 tokens.push_back(StripMarginWhitespace(remainder.substr(0, delimiter)));
-                remainder = StripMarginWhitespace(remainder.substr(delimiter + 1));
+                remainder = NormalizeCaseInsensitiveString(
+                    StripMarginWhitespace(remainder.substr(delimiter + 1))
+                );
             }
         }
     }
