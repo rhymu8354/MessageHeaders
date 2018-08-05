@@ -333,7 +333,6 @@ namespace MessageHeaders {
          */
         std::vector< HeaderValue > GetHeaderMultiValue(const HeaderName& name) const;
 
-
         /**
          * This method returns the sequence of tokens extracted from the header
          * with the given name in the message.
@@ -351,6 +350,24 @@ namespace MessageHeaders {
          *     in the message.
          */
         std::vector< HeaderValue > GetHeaderTokens(const HeaderName& name) const;
+
+        /**
+         * This method returns an indication of whether or not the header
+         * with the given name in the message contains the given token.
+         *
+         * @param[in] name
+         *     This is the name of the header whose values should be
+         *     interpreted as a sequence of tokens, in which to look for
+         *     the given token.
+         *
+         * @return
+         *     An indication of whether or not the given header
+         *     contains the given token is returned.
+         */
+        bool HasHeaderToken(
+            const HeaderName& name,
+            const HeaderValue& token
+        ) const;
 
         /**
          * This method adds or replaces the header with the given name,

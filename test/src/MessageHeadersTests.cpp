@@ -644,3 +644,27 @@ TEST(MessageHeadersTests, GetHeaderTokens) {
         headers.GetHeaderTokens("Spam")
     );
 }
+
+TEST(MessageHeadersTests, HasHeaderToken) {
+    const std::string rawMessage = (
+        "Foo: bar, Spam,  heLLo\r\n"
+        "Bar: Foo \r\n"
+        "Spam:   \t  \r\n"
+        "\r\n"
+    );
+    MessageHeaders::MessageHeaders headers;
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage(rawMessage)
+    );
+    EXPECT_TRUE(headers.HasHeaderToken("Foo", "bar"));
+    EXPECT_TRUE(headers.HasHeaderToken("Foo", "Bar"));
+    EXPECT_TRUE(headers.HasHeaderToken("Foo", "spam"));
+    EXPECT_TRUE(headers.HasHeaderToken("Foo", "hello"));
+    EXPECT_FALSE(headers.HasHeaderToken("Foo", "xyz"));
+    EXPECT_FALSE(headers.HasHeaderToken("Foo", "secret_to_the_universe"));
+    EXPECT_TRUE(headers.HasHeaderToken("Bar", "foo"));
+    EXPECT_FALSE(headers.HasHeaderToken("Bar", "spam"));
+    EXPECT_FALSE(headers.HasHeaderToken("Spam", "foo"));
+    EXPECT_FALSE(headers.HasHeaderToken("Spam", "spam"));
+}

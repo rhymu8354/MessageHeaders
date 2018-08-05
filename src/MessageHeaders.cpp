@@ -624,6 +624,20 @@ namespace MessageHeaders {
         return tokens;
     }
 
+    bool MessageHeaders::HasHeaderToken(
+        const HeaderName& name,
+        const HeaderValue& token
+    ) const {
+        const auto normalizedToken = SystemAbstractions::ToLower(token);
+        bool foundToken = false;
+        for (const auto tokenInHeader: GetHeaderTokens(name)) {
+            if (tokenInHeader == normalizedToken) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void MessageHeaders::SetHeader(
         const HeaderName& name,
         const HeaderValue& value
