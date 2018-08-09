@@ -53,11 +53,11 @@ namespace MessageHeaders {
         class HeaderName {
             // Lifecycle Management
         public:
-            ~HeaderName() = default;
+            ~HeaderName() noexcept = default;
             HeaderName(const HeaderName& s) = default;
-            HeaderName(HeaderName&& s) = default;
+            HeaderName(HeaderName&& s) noexcept = default;
             HeaderName& operator=(const HeaderName&) = default;
-            HeaderName& operator=(HeaderName&&) = default;
+            HeaderName& operator=(HeaderName&&) noexcept = default;
 
             // Public Methods
         public:
@@ -187,11 +187,11 @@ namespace MessageHeaders {
 
         // Lifecycle management
     public:
-        ~MessageHeaders();
+        ~MessageHeaders() noexcept;
         MessageHeaders(const MessageHeaders&) = delete;
-        MessageHeaders(MessageHeaders&&);
+        MessageHeaders(MessageHeaders&&) noexcept;
         MessageHeaders& operator=(const MessageHeaders&) = delete;
-        MessageHeaders& operator=(MessageHeaders&&);
+        MessageHeaders& operator=(MessageHeaders&&) noexcept;
 
         // Public methods
     public:

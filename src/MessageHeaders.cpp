@@ -477,9 +477,9 @@ namespace MessageHeaders {
 
     };
 
-    MessageHeaders::~MessageHeaders() = default;
-    MessageHeaders::MessageHeaders(MessageHeaders&&) = default;
-    MessageHeaders& MessageHeaders::operator=(MessageHeaders&&) = default;
+    MessageHeaders::~MessageHeaders() noexcept = default;
+    MessageHeaders::MessageHeaders(MessageHeaders&&) noexcept = default;
+    MessageHeaders& MessageHeaders::operator=(MessageHeaders&&) noexcept = default;
 
     MessageHeaders::MessageHeaders()
         : impl_(new Impl)
