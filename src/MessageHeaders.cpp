@@ -560,7 +560,7 @@ namespace MessageHeaders {
             // line unfolding if we see any lines that begin with whitespace.
             offset = lineTerminator + CRLF.length();
             if (
-                !AdvanceAndUnfold(
+                AdvanceAndUnfold(
                     rawMessage,
                     offset,
                     lineTerminator,
@@ -568,6 +568,7 @@ namespace MessageHeaders {
                 )
             ) {
                 bodyOffset = offset;
+            } else {
                 return State::Incomplete;
             }
 

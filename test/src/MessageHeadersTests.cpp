@@ -193,10 +193,10 @@ TEST(MessageHeadersTests, SingleLineNotTruncated) {
     MessageHeaders::MessageHeaders headers;
     size_t messageEnd;
     ASSERT_EQ(
-        MessageHeaders::MessageHeaders::State::Incomplete,
-        headers.ParseRawMessage("User-Agent: curl\r\n", messageEnd)
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage("User-Agent: curl\r\n\r\n", messageEnd)
     );
-    ASSERT_EQ(18, messageEnd);
+    ASSERT_EQ(20, messageEnd);
 }
 
 TEST(MessageHeadersTests, NoHeadersAtAll) {
@@ -693,4 +693,45 @@ TEST(MessageHeadersTests, CopyHeadersInAssignment) {
     EXPECT_EQ("World", originalHeaders.GetHeaderValue("Hello"));
     EXPECT_EQ("Bar", headersCopy.GetHeaderValue("Foo"));
     EXPECT_EQ("PePe", headersCopy.GetHeaderValue("Hello"));
+}
+
+TEST(MessageHeadersTests, HttpClientRequestMessageInTwoPartsDividedBetweenHeaderLines) {
+    MessageHeaders::MessageHeaders headers;
+    const std::vector< std::string > rawMessagePieces{
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+        "Host: www.example.com\r\n",
+        "Accept-Language: en, mi\r\n",
+        "\r\n"
+    };
+    size_t messageEnd;
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Incomplete,
+        headers.ParseRawMessage(rawMessagePieces[0] + rawMessagePieces[1], messageEnd)
+    );
+    ASSERT_EQ(rawMessagePieces[0].length(), messageEnd);
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage(rawMessagePieces[1] + rawMessagePieces[2] + rawMessagePieces[3], messageEnd)
+    );
+    ASSERT_TRUE(headers.IsValid());
+    ASSERT_EQ(rawMessagePieces[1].length() + rawMessagePieces[2].length() + rawMessagePieces[3].length(), messageEnd);
+    const auto headerCollection = headers.GetAll();
+    struct ExpectedHeader {
+        std::string name;
+        std::string value;
+    };
+    const std::vector< ExpectedHeader > expectedHeaders{
+        {"User-Agent", "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3"},
+        {"Host", "www.example.com"},
+        {"Accept-Language", "en, mi"},
+    };
+    ASSERT_EQ(expectedHeaders.size(), headerCollection.size());
+    for (size_t i = 0; i < expectedHeaders.size(); ++i) {
+        ASSERT_EQ(expectedHeaders[i].name, headerCollection[i].name);
+        ASSERT_EQ(expectedHeaders[i].value, headerCollection[i].value);
+    }
+    ASSERT_TRUE(headers.HasHeader("Host"));
+    ASSERT_FALSE(headers.HasHeader("Foobar"));
+    const auto rawMessage = rawMessagePieces[0] + rawMessagePieces[1] + rawMessagePieces[2] + rawMessagePieces[3];
+    ASSERT_EQ(rawMessage, headers.GenerateRawHeaders());
 }
