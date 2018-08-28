@@ -478,7 +478,18 @@ namespace MessageHeaders {
     };
 
     MessageHeaders::~MessageHeaders() noexcept = default;
+    MessageHeaders::MessageHeaders(const MessageHeaders& other)
+        : impl_(new Impl)
+    {
+        *impl_ = *other.impl_;
+    }
     MessageHeaders::MessageHeaders(MessageHeaders&&) noexcept = default;
+    MessageHeaders& MessageHeaders::operator=(const MessageHeaders& other) {
+        if (this != &other) {
+            *impl_ = *other.impl_;
+        }
+        return *this;
+    }
     MessageHeaders& MessageHeaders::operator=(MessageHeaders&&) noexcept = default;
 
     MessageHeaders::MessageHeaders()

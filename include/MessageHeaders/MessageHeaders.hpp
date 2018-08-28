@@ -188,9 +188,9 @@ namespace MessageHeaders {
         // Lifecycle management
     public:
         ~MessageHeaders() noexcept;
-        MessageHeaders(const MessageHeaders&) = delete;
+        MessageHeaders(const MessageHeaders&);
         MessageHeaders(MessageHeaders&&) noexcept;
-        MessageHeaders& operator=(const MessageHeaders&) = delete;
+        MessageHeaders& operator=(const MessageHeaders&);
         MessageHeaders& operator=(MessageHeaders&&) noexcept;
 
         // Public methods

@@ -668,3 +668,29 @@ TEST(MessageHeadersTests, HasHeaderToken) {
     EXPECT_FALSE(headers.HasHeaderToken("Spam", "foo"));
     EXPECT_FALSE(headers.HasHeaderToken("Spam", "spam"));
 }
+
+TEST(MessageHeadersTests, CopyHeadersInConstructor) {
+    MessageHeaders::MessageHeaders originalHeaders;
+    originalHeaders.SetHeader("Foo", "Bar");
+    originalHeaders.SetHeader("Hello", "World");
+    MessageHeaders::MessageHeaders headersCopy(originalHeaders);
+    headersCopy.SetHeader("Hello", "PePe");
+    EXPECT_EQ("Bar", originalHeaders.GetHeaderValue("Foo"));
+    EXPECT_EQ("World", originalHeaders.GetHeaderValue("Hello"));
+    EXPECT_EQ("Bar", headersCopy.GetHeaderValue("Foo"));
+    EXPECT_EQ("PePe", headersCopy.GetHeaderValue("Hello"));
+}
+
+TEST(MessageHeadersTests, CopyHeadersInAssignment) {
+    MessageHeaders::MessageHeaders originalHeaders;
+    originalHeaders.SetHeader("Foo", "Bar");
+    originalHeaders.SetHeader("Hello", "World");
+    MessageHeaders::MessageHeaders headersCopy;
+    headersCopy.SetHeader("Foo", "XXX");
+    headersCopy = originalHeaders;
+    headersCopy.SetHeader("Hello", "PePe");
+    EXPECT_EQ("Bar", originalHeaders.GetHeaderValue("Foo"));
+    EXPECT_EQ("World", originalHeaders.GetHeaderValue("Hello"));
+    EXPECT_EQ("Bar", headersCopy.GetHeaderValue("Foo"));
+    EXPECT_EQ("PePe", headersCopy.GetHeaderValue("Hello"));
+}
