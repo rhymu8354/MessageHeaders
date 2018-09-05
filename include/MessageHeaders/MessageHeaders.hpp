@@ -98,6 +98,20 @@ namespace MessageHeaders {
             bool operator==(const HeaderName& rhs) const noexcept;
 
             /**
+             * This is the less-than operator for the class.
+             *
+             * @param[in] rhs
+             *     This is the other header name with which to compare.
+             *
+             * @return
+             *     An indication of whether or not "this" header name
+             *     is considered "less than" (lower rank than) the
+             *     given header name is returned.  The names are compared
+             *     in a case-insensitive manner.
+             */
+            bool operator<(const HeaderName& rhs) const noexcept;
+
+            /**
              * This is the typecast operator to C++ string.
              *
              * @return

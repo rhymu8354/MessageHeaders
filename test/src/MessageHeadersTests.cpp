@@ -33,6 +33,29 @@ TEST(MessageHeadersTests, HeaderNameEquivalency) {
     }
 }
 
+TEST(MessageHeadersTests, HeaderNameRank) {
+    struct TestVector {
+        bool expectedResult;
+        MessageHeaders::MessageHeaders::HeaderName lhs;
+        MessageHeaders::MessageHeaders::HeaderName rhs;
+    };
+    const std::vector< TestVector > testVectors{
+        {false, "hello", "hello"},
+        {false, "Hello", "hello"},
+        {false, "hello", "Hello"},
+        {false, "jello", "hello"},
+        {true, "hello", "jello"},
+        {false, "hello", "hell"},
+        {true, "hell", "hello"},
+    };
+    for (const auto& testVector: testVectors) {
+        EXPECT_EQ(
+            testVector.expectedResult,
+            (testVector.lhs < testVector.rhs)
+        );
+    }
+}
+
 TEST(MessageHeadersTests, HttpClientRequestMessage) {
     MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (

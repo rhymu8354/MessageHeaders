@@ -6,6 +6,7 @@
  * © 2018 by Richard Walters
  */
 
+#include <algorithm>
 #include <ctype.h>
 #include <functional>
 #include <MessageHeaders/MessageHeaders.hpp>
@@ -389,6 +390,25 @@ namespace MessageHeaders {
             }
         }
         return true;
+    }
+
+    bool MessageHeaders::HeaderName::operator<(const HeaderName& rhs) const noexcept {
+        for (size_t i = 0; i < std::min(name_.length(), rhs.name_.length()); ++i) {
+            const auto lhsChar = tolower(name_[i]);
+            const auto rhsChar = tolower(rhs.name_[i]);
+            if (lhsChar < rhsChar) {
+                return true;
+            } else if (lhsChar > rhsChar) {
+                return false;
+            }
+        }
+        const auto lhsLength = name_.length();
+        const auto rhsLength = rhs.name_.length();
+        if (lhsLength < rhsLength) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     MessageHeaders::HeaderName::operator const std::string&() const noexcept {
