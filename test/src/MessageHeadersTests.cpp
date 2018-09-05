@@ -13,6 +13,26 @@
 #include <string>
 #include <vector>
 
+TEST(MessageHeadersTests, HeaderNameEquivalency) {
+    struct TestVector {
+        bool expectedResult;
+        MessageHeaders::MessageHeaders::HeaderName lhs;
+        MessageHeaders::MessageHeaders::HeaderName rhs;
+    };
+    const std::vector< TestVector > testVectors{
+        {true, "hello", "hello"},
+        {true, "Hello", "hello"},
+        {false, "jello", "hello"},
+        {false, "hello", "hell"},
+    };
+    for (const auto& testVector: testVectors) {
+        EXPECT_EQ(
+            testVector.expectedResult,
+            (testVector.lhs == testVector.rhs)
+        );
+    }
+}
+
 TEST(MessageHeadersTests, HttpClientRequestMessage) {
     MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
