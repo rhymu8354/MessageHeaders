@@ -661,7 +661,6 @@ namespace MessageHeaders {
         const HeaderValue& token
     ) const {
         const auto normalizedToken = SystemAbstractions::ToLower(token);
-        bool foundToken = false;
         for (const auto tokenInHeader: GetHeaderTokens(name)) {
             if (tokenInHeader == normalizedToken) {
                 return true;
