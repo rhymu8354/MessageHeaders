@@ -57,7 +57,7 @@ namespace MessageHeaders {
             HeaderName(const HeaderName& s) = default;
             HeaderName(HeaderName&& s) noexcept = default;
             HeaderName& operator=(const HeaderName&) = default;
-            HeaderName& operator=(HeaderName&&) noexcept = default;
+            HeaderName& operator=(HeaderName&&) = default;
 
             // Public Methods
         public:
