@@ -12,7 +12,7 @@
 #include <MessageHeaders/MessageHeaders.hpp>
 #include <sstream>
 #include <string>
-#include <SystemAbstractions/StringExtensions.hpp>
+#include <StringExtensions/StringExtensions.hpp>
 
 namespace {
 
@@ -72,11 +72,11 @@ namespace {
         while (!remainder.empty()) {
             auto delimiter = remainder.find_first_of(',');
             if (delimiter == std::string::npos) {
-                tokens.push_back(SystemAbstractions::ToLower(remainder));
+                tokens.push_back(StringExtensions::ToLower(remainder));
                 remainder.clear();
             } else {
                 tokens.push_back(StripMarginWhitespace(remainder.substr(0, delimiter)));
-                remainder = SystemAbstractions::ToLower(
+                remainder = StringExtensions::ToLower(
                     StripMarginWhitespace(remainder.substr(delimiter + 1))
                 );
             }
@@ -660,7 +660,7 @@ namespace MessageHeaders {
         const HeaderName& name,
         const HeaderValue& token
     ) const {
-        const auto normalizedToken = SystemAbstractions::ToLower(token);
+        const auto normalizedToken = StringExtensions::ToLower(token);
         for (const auto tokenInHeader: GetHeaderTokens(name)) {
             if (tokenInHeader == normalizedToken) {
                 return true;
