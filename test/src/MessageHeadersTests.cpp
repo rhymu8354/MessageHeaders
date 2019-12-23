@@ -335,7 +335,7 @@ TEST(MessageHeadersTests, GetValueOfMissingHeader) {
     ASSERT_EQ("", headers.GetHeaderValue("PePe"));
 }
 
-TEST(MessageHeadersTests, HeaderWithNotPermittedCharacterInName) {
+TEST(MessageHeadersTests, Header_With_Character_Less_Than_33_In_Name) {
     MessageHeaders::MessageHeaders headers;
     const std::string rawMessage = (
         "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
@@ -350,6 +350,58 @@ TEST(MessageHeadersTests, HeaderWithNotPermittedCharacterInName) {
         headers.ParseRawMessage(rawMessage, messageEnd)
     );
     ASSERT_FALSE(headers.IsValid());
+    ASSERT_EQ(rawMessage.length(), messageEnd);
+}
+
+TEST(MessageHeadersTests, Header_With_Character_Greater_Than_126_In_Name) {
+    MessageHeaders::MessageHeaders headers;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "FeelsBadMan\x7f: LUL\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    size_t messageEnd = std::numeric_limits< size_t >::max();
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage(rawMessage, messageEnd)
+    );
+    ASSERT_FALSE(headers.IsValid());
+    ASSERT_EQ(rawMessage.length(), messageEnd);
+}
+
+TEST(MessageHeadersTests, Header_With_Colon_In_Name) {
+    MessageHeaders::MessageHeaders headers;
+    const std::string rawMessage = (
+        "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n"
+        "Host: www.example.com\r\n"
+        "Feels:BadMan: LUL\r\n"
+        "Accept-Language: en, mi\r\n"
+        "\r\n"
+    );
+    size_t messageEnd = std::numeric_limits< size_t >::max();
+    ASSERT_EQ(
+        MessageHeaders::MessageHeaders::State::Complete,
+        headers.ParseRawMessage(rawMessage, messageEnd)
+    );
+    ASSERT_TRUE(headers.IsValid());
+    const auto headerCollection = headers.GetAll();
+    struct ExpectedHeader {
+        std::string name;
+        std::string value;
+    };
+    const std::vector< ExpectedHeader > expectedHeaders{
+        {"User-Agent", "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3"},
+        {"Host", "www.example.com"},
+        {"Feels", "BadMan: LUL"},
+        {"Accept-Language", "en, mi"},
+    };
+    ASSERT_EQ(expectedHeaders.size(), headerCollection.size());
+    for (size_t i = 0; i < expectedHeaders.size(); ++i) {
+        ASSERT_EQ(expectedHeaders[i].name, headerCollection[i].name);
+        ASSERT_EQ(expectedHeaders[i].value, headerCollection[i].value);
+    }
     ASSERT_EQ(rawMessage.length(), messageEnd);
 }
 
