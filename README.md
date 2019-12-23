@@ -1,6 +1,6 @@
 # InternetMessage
 
-This is a library which implements [RFC 2822](https://tools.ietf.org/html/rfc2822),
+This is a library which implements [RFC 5322](https://tools.ietf.org/html/rfc5322),
 "Internet Message Format".
 
 ## Usage
