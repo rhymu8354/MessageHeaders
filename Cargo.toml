@@ -1,0 +1,13 @@
+[package]
+name = "message_headers"
+version = "0.1.0"
+description = "Implementation of IETF RFC 5322, Internet Message Format"
+authors = ["Richard Walters <rwalters@digitalstirling.com>"]
+edition = "2018"
+license-file = "LICENSE.txt"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+named_tuple = "0.1"
