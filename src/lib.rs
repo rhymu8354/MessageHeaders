@@ -114,7 +114,7 @@ fn validate_header_value(text: &str) -> Result<(), Error> {
     }
 }
 
-#[derive(Debug, Default, Eq, Ord)]
+#[derive(Debug, Default, Eq)]
 pub struct HeaderName {
     name: String,
 }
