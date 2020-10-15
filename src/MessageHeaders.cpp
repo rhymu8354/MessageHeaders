@@ -234,6 +234,9 @@ namespace {
                     nextLineStart
                 )
             ) {
+                // TODO: It looks like if we can't fold a line and it's
+                // too long, we just give up?  This ends up dropping
+                // the header entirely.  Is this what we want?
                 return {};
             }
             std::string part;
@@ -283,6 +286,7 @@ namespace {
         MessageHeaders::MessageHeaders::HeaderName& name,
         MessageHeaders::MessageHeaders::HeaderValue& value
     ) {
+        // TODO: This could find a colon past the line end!
         auto nameValueDelimiter = rawMessage.find(':', lineStart);
         if (nameValueDelimiter == std::string::npos) {
             return false;
@@ -311,12 +315,12 @@ namespace {
      * @param[in] rawMessage
      *     This is the string containing the message.
      *
-     * @paraam[in] offset
+     * @param[in,out] offset
      *     This is the current position into rawMessage where
      *     we should look for lines to potentially unfold
      *     into the given header value.
      *
-     * @param[in] lineTerminator
+     * @param[in,out] lineTerminator
      *     This is the position of the end of the current line.
      *
      * @param[in,out] value
@@ -355,6 +359,9 @@ namespace {
                 value += ' ';
 
                 // Remove leading whitespace from the next line.
+                //
+                // TODO: If the line only has whitespace in it, wouldn't
+                // `firstNonWhitespaceInNextLine` become std::string::npos?
                 const auto firstNonWhitespaceInNextLine = rawMessage.find_first_not_of(WSP, nextLineStart);
                 nextLineLength -= (firstNonWhitespaceInNextLine - nextLineStart);
 
@@ -574,10 +581,16 @@ namespace MessageHeaders {
                 )
             ) {
                 impl_->valid = false;
+                // TODO: Shouldn't we return an error here?  It seems like if
+                // we don't, name and/or value might be empty string, and
+                // although the headers will be marked as invalid, we will
+                // still be inserting junk into the headers for no reason.
             }
 
             // Look ahead in the raw message and perform
             // line unfolding if we see any lines that begin with whitespace.
+            //
+            // TODO: AdvanceAndUnfold doesn't check for invisible characters!
             offset = lineTerminator + CRLF.length();
             if (
                 AdvanceAndUnfold(

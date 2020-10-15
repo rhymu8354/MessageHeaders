@@ -11,3 +11,4 @@ readme = "README.md"
 
 [dependencies]
 named_tuple = "0.1"
+thiserror = "1.0"
