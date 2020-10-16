@@ -239,6 +239,12 @@ pub enum ParseStatus {
     Incomplete(usize),
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum HeaderMultiMode {
+    OneLine,
+    MultiLine,
+}
+
 #[derive(Debug, Default)]
 pub struct MessageHeaders {
     headers: Vec<Header>,
@@ -255,7 +261,32 @@ impl MessageHeaders {
         self.headers.push(Header{name, value});
     }
 
-    pub fn generate_raw_string(&self) -> Result<String, Error> {
+    pub fn add_header_multi_value<N, V>(
+        &mut self,
+        name: N,
+        values: V,
+        mode: HeaderMultiMode
+    )
+        where N: AsRef<str>, V: Into<Vec<String>>
+    {
+        let values = values.into();
+        if values.is_empty() {
+            return;
+        }
+        match mode {
+            HeaderMultiMode::OneLine => {
+                self.add_header(name, values.join(","));
+            },
+            HeaderMultiMode::MultiLine => {
+                let name = name.as_ref();
+                for value in values {
+                    self.add_header(name, value);
+                }
+            },
+        }
+    }
+
+    pub fn generate(&self) -> Result<String, Error> {
         let mut raw_string = String::new();
         for header in &self.headers {
             let line_buffer = format!("{}: {}", header.name, header.value);
@@ -283,6 +314,35 @@ impl MessageHeaders {
     #[must_use]
     pub fn get_all(&self) -> &Vec<Header> {
         &self.headers
+    }
+
+    #[must_use]
+    pub fn get_header_multi_value<T>(&self, name: T) -> Vec<String>
+        where T: AsRef<str>
+    {
+        let name = name.as_ref();
+        self.headers.iter()
+            .filter_map(|header| {
+                if header.name == name {
+                    Some(header.value.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn get_header_tokens<T>(&self, name: T) -> Vec<String>
+        where T: AsRef<str>
+    {
+        self.get_header_multi_value(name).iter()
+            .flat_map(|value| {
+                value.split_terminator(',')
+                    .map(str::trim)
+                    .map(str::to_ascii_lowercase)
+            })
+            .collect()
     }
 
     #[must_use]
@@ -412,6 +472,15 @@ impl MessageHeaders {
         Ok(ParseStatus::Incomplete(offset))
     }
 
+    pub fn remove_header<N>(&mut self, name: N)
+        where N: AsRef<str>
+    {
+        let name = name.as_ref();
+        self.headers.retain(|header| {
+            header.name != name
+        });
+    }
+
     pub fn set_header<N, V>(&mut self, name: N, value: V)
         where N: AsRef<str>, V: Into<String>
     {
@@ -443,6 +512,35 @@ impl MessageHeaders {
         }
     }
 
+    pub fn set_header_multi_value<N, V>(
+        &mut self,
+        name: N,
+        values: V,
+        mode: HeaderMultiMode
+    )
+        where N: AsRef<str>, V: Into<Vec<String>>
+    {
+        let values = values.into();
+        if values.is_empty() {
+            return;
+        }
+        match mode {
+            HeaderMultiMode::OneLine => {
+                self.set_header(name, values.join(","));
+            },
+            HeaderMultiMode::MultiLine => {
+                let name = name.as_ref();
+                for (i, value) in values.iter().enumerate() {
+                    if i == 0 {
+                        self.set_header(name, value);
+                    } else {
+                        self.add_header(name, value);
+                    }
+                }
+            },
+        }
+    }
+
     pub fn set_line_limit(&mut self, limit: Option<usize>) {
         self.line_length_limit = limit;
     }
@@ -451,7 +549,7 @@ impl MessageHeaders {
 
 impl std::fmt::Display for MessageHeaders {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(raw_string) = self.generate_raw_string() {
+        if let Ok(raw_string) = self.generate() {
             write!(f, "{}", raw_string)
         } else {
             Ok(())
@@ -973,7 +1071,7 @@ mod tests {
             let mut headers = MessageHeaders::new();
             headers.set_line_limit(Some(12));
             headers.set_header(header_name, *test_vector.header_value());
-            let raw_headers = headers.generate_raw_string();
+            let raw_headers = headers.generate();
             if let Some(expected_lines) = test_vector.expected_lines() {
                 assert!(raw_headers.is_ok());
                 let raw_headers = raw_headers.unwrap();
@@ -983,6 +1081,294 @@ mod tests {
                 assert!(raw_headers.is_err());
             }
         }
+    }
+
+    #[test]
+    fn header_names_should_be_case_insensive() {
+        named_tuple!(
+            struct TestVector {
+                header_name: &'static str,
+                should_also_match: &'static [&'static str],
+            }
+        );
+        let test_vectors: &[TestVector] = &[
+            ("Content-Type", &["content-type", "CONTENT-TYPE", "Content-type", "CoNtENt-TYpe"][..]).into(),
+            ("ETag", &["etag", "ETAG", "Etag", "eTag", "etaG"][..]).into(),
+        ];
+        for test_vector in test_vectors {
+            let mut headers = MessageHeaders::new();
+            headers.set_header(test_vector.header_name(), "HeyGuys");
+            for alternative in *test_vector.should_also_match() {
+                assert!(headers.has_header(alternative));
+            }
+        }
+    }
+
+    #[test]
+    fn get_header_multiple_values() {
+        let raw_message = concat!(
+            "Via: SIP/2.0/UDP server10.biloxi.com\r\n",
+            "    ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
+            "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com\r\n",
+            "    ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
+            "Via: SIP/2.0/UDP pc33.atlanta.com\r\n",
+            "    ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+            "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+            "\r\n",
+        );
+        let mut headers = MessageHeaders::new();
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        assert_eq!(
+            Some(concat!(
+                "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1",
+            )),
+            headers.get_header_value("Via").as_deref()
+        );
+        assert_eq!(
+            &[
+                "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+                "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+                "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1",
+            ][..],
+            headers.get_header_multi_value("Via")
+        );
+        assert_eq!(
+            Some("Bob <sip:bob@biloxi.com>;tag=a6c85cf"),
+            headers.get_header_value("To").as_deref()
+        );
+        assert_eq!(
+            &[
+                "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
+            ][..],
+            headers.get_header_multi_value("To")
+        );
+        assert!(
+            headers.get_header_multi_value("PogChamp").is_empty()
+        );
+    }
+
+    #[test]
+    fn set_header_multi_valueple_values() {
+        let via: Vec<String> = [
+            "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+        ].iter().map(|s| String::from(*s)).collect();
+        let to : Vec<String>= [
+            "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
+        ].iter().map(|s| String::from(*s)).collect();
+        let mut headers = MessageHeaders::new();
+        headers.set_header_multi_value("Via", via.clone(), HeaderMultiMode::OneLine);
+        headers.set_header_multi_value("To", to.clone(), HeaderMultiMode::OneLine);
+        headers.set_header_multi_value("FeelsBadMan", vec![] as Vec<String>, HeaderMultiMode::OneLine);
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        headers = MessageHeaders::new();
+        headers.set_header_multi_value("Via", via, HeaderMultiMode::MultiLine);
+        headers.set_header_multi_value("To", to, HeaderMultiMode::MultiLine);
+        headers.set_header_multi_value("FeelsBadMan", vec![] as Vec<String>, HeaderMultiMode::MultiLine);
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
+                "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
+                "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+    }
+
+    #[test]
+    fn set_header_should_replace_all_previous_values() {
+        let via: Vec<String> = [
+            "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+        ].iter().map(|s| String::from(*s)).collect();
+        let mut headers = MessageHeaders::new();
+        headers.set_header_multi_value("Via", via, HeaderMultiMode::OneLine);
+        headers.set_header("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
+        headers.set_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+        headers.add_header("Via", "Trickster");
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "Via: Trickster\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        headers.set_header("Via", "Kappa");
+        assert_eq!(
+            Ok(concat!(
+                "Via: Kappa\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+    }
+
+    #[test]
+    fn add_header() {
+        let via: Vec<String> = [
+            "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+        ].iter().map(|s| String::from(*s)).collect();
+        let mut headers = MessageHeaders::new();
+        headers.set_header_multi_value("Via", via, HeaderMultiMode::OneLine);
+        headers.set_header("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        headers.add_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        let x_pepe: Vec<String> = [
+            "<3",
+            "SeemsGood",
+        ].iter().map(|s| String::from(*s)).collect();
+        headers.add_header_multi_value("X-PePe", x_pepe, HeaderMultiMode::OneLine);
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "X-PePe: <3,SeemsGood\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        let to: Vec<String> = ["Carol"].iter().map(|s| String::from(*s)).collect();
+        headers.add_header_multi_value("To", to, HeaderMultiMode::OneLine);
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+                    "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+                    "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "X-PePe: <3,SeemsGood\r\n",
+                "To: Carol\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+    }
+
+    #[test]
+    fn remove_header() {
+        let via: Vec<String> = [
+            "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+            "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+            "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+        ].iter().map(|s| String::from(*s)).collect();
+        let mut headers = MessageHeaders::new();
+        headers.set_header_multi_value("Via", via, HeaderMultiMode::MultiLine);
+        headers.set_header("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
+        headers.add_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
+                "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
+                "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        headers.remove_header("From");
+        assert_eq!(
+            Ok(concat!(
+                "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
+                "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
+                "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+        headers.remove_header("Via");
+        assert_eq!(
+            Ok(concat!(
+                "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
+                "\r\n",
+            )),
+            headers.generate().as_deref()
+        );
+    }
+
+    #[test]
+    fn get_header_tokens() {
+        let raw_message = concat!(
+            "Foo: bar, Spam,  heLLo\r\n",
+            "Bar: Foo \r\n",
+            "Spam:   \t  \r\n",
+            "\r\n",
+        );
+        let mut headers = MessageHeaders::new();
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert_eq!(
+            &[
+                "bar",
+                "spam",
+                "hello",
+            ][..],
+            headers.get_header_tokens("Foo")
+        );
+        assert_eq!(
+            &[
+                "foo",
+            ][..],
+            headers.get_header_tokens("Bar")
+        );
+        assert_eq!(
+            &[] as &[String],
+            headers.get_header_tokens("Spam")
+        );
     }
 
 }
