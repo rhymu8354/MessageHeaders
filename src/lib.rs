@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![allow(clippy::non_ascii_literal)]
 #![allow(clippy::missing_errors_doc)]
 
 #[cfg(test)]
@@ -80,8 +81,8 @@ fn fold_header(
 
 fn unfold_header(
     mut raw_message: &str,
-    mut value: String,
-) -> Result<Option<(String, usize)>, Error> {
+    mut header: Header,
+) -> Result<Option<(Header, usize)>, Error> {
     let mut consumed = 0;
     loop {
         // Find where the next line ends.
@@ -104,18 +105,18 @@ fn unfold_header(
             ).is_some()
         {
             // Append a single space to the header value.
-            value.push(' ');
+            header.value.push(' ');
 
             // Concatenate the next line to the header value after trimming it.
             let next_segment = &raw_message[..line_terminator];
-            validate_header_value(next_segment)?;
-            value += next_segment.trim();
+            validate_header_value(&header, next_segment)?;
+            header.value += next_segment.trim();
 
             // Move to the line following the next line.
             raw_message = &raw_message[line_length..];
             consumed += line_length;
         } else {
-            return Ok(Some((value, consumed)));
+            return Ok(Some((header, consumed)));
         }
     }
 }
@@ -130,8 +131,11 @@ fn validate_header_name(text: &str) -> Result<(), Error> {
     }
 }
 
-fn validate_header_value(text: &str) -> Result<(), Error> {
-    if text.chars()
+fn validate_header_value(
+    header: &Header,
+    value_segment: &str
+) -> Result<(), Error> {
+    if value_segment.chars()
         .all(|c|
             c == '\t'
             || c == ' '
@@ -140,7 +144,10 @@ fn validate_header_value(text: &str) -> Result<(), Error> {
     {
         Ok(())
     } else {
-        Err(Error::HeaderValueContainsIllegalCharacter(text.to_string()))
+        Err(Error::HeaderValueContainsIllegalCharacter{
+            name: header.name.clone(),
+            value_segment: value_segment.to_string()
+        })
     }
 }
 
@@ -207,7 +214,7 @@ impl PartialOrd for HeaderName {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Header {
     pub name: HeaderName,
     pub value: String,
@@ -452,18 +459,21 @@ impl MessageHeaders {
             match separate_header_name_and_value(
                 &raw_message[offset..offset+line_terminator]
             ) {
-                Ok(mut header) => {
+                Ok(header) => {
+                    // Check the first value segment for validity.
+                    validate_header_value(&header, &header.value)?;
+
                     // Look ahead in the raw message and perform line unfolding
                     // if we see any lines that begin with whitespace.
                     let next_offset = offset + line_terminator + CRLF.len();
-                    if let Some((value, consumed)) = unfold_header(
+                    if let Some((mut header, consumed)) = unfold_header(
                         &raw_message[next_offset..],
-                        header.value
+                        header
                     )? {
                         // Remove any whitespace that might be at the beginning
                         // or end of the header value, and then store the
                         // header.
-                        header.value = value.trim().to_string();
+                        header.value = header.value.trim().to_string();
                         self.headers.push(header);
                         offset = next_offset + consumed;
                     } else {
@@ -969,6 +979,43 @@ mod tests {
             Err(Error::HeaderNameContainsIllegalCharacter(
                 String::from("FeelsBadMan\x7f")
             )),
+            headers.parse(raw_message)
+        );
+    }
+
+    #[test]
+    fn header_with_illegal_character_in_value_first_segment() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.çom\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Err(Error::HeaderValueContainsIllegalCharacter{
+                name: HeaderName::from("Host"),
+                value_segment: String::from(" www.example.çom")
+            }),
+            headers.parse(raw_message)
+        );
+    }
+
+    #[test]
+    fn header_with_illegal_character_in_value_second_segment() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en,\r\n",
+            " mi, ça\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Err(Error::HeaderValueContainsIllegalCharacter{
+                name: HeaderName::from("Accept-Language"),
+                value_segment: String::from(" mi, ça")
+            }),
             headers.parse(raw_message)
         );
     }

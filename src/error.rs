@@ -1,3 +1,5 @@
+use super::HeaderName;
+
 /// This is the enumeration of all the different kinds of errors which this
 /// crate generates.
 #[derive(Debug, Clone, thiserror::Error, PartialEq)]
@@ -18,12 +20,10 @@ pub enum Error {
     #[error("header name contains an illegal character")]
     HeaderNameContainsIllegalCharacter(String),
 
-    /// The attached string is the value of a header encountered that has
-    /// one or more illegal characters in it.
-    ///
-    /// TODO: Consider including header name here as well
+    /// The header with the attached name has a value containing an illegal
+    /// character, found in the attached segment.
     #[error("header value contains an illegal character")]
-    HeaderValueContainsIllegalCharacter(String),
+    HeaderValueContainsIllegalCharacter{name: HeaderName, value_segment: String},
 
     /// The attached string is a header, or part of a header, that is
     /// too long and cannot be folded to fit.
