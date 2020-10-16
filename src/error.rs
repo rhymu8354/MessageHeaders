@@ -24,10 +24,19 @@ pub enum Error {
     /// TODO: Consider including header name here as well
     #[error("header value contains an illegal character")]
     HeaderValueContainsIllegalCharacter(String),
+
+    /// The attached string is a header, or part of a header, that is
+    /// too long and cannot be folded to fit.
+    #[error("header line could not be folded")]
+    HeaderLineCouldNotBeFolded(String),
+
+    /// The attached error occurred during string formatting.
+    #[error("error during string format")]
+    StringFormat(std::fmt::Error),
 }
 
-impl From<Error> for std::fmt::Error {
-    fn from(_: Error) -> Self {
-        Self{}
+impl From<std::fmt::Error> for Error {
+    fn from(error: std::fmt::Error) -> Self {
+        Error::StringFormat(error)
     }
 }

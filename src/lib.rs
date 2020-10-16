@@ -8,6 +8,7 @@ extern crate named_tuple;
 mod error;
 
 use error::Error;
+use std::fmt::Write;
 
 // These are the characters that are considered whitespace and
 // should be stripped off by the Strip() function.
@@ -35,10 +36,46 @@ fn separate_header_name_and_value(line: &str) -> Result<Header, Error> {
 }
 
 fn fold_header(
-    line: &mut &str,
-    line_length_limit: usize
-) -> Result<String, Error> {
-    todo!()
+    line: &str,
+    line_length_limit: usize,
+    skip: usize,
+) -> Result<(&str, &str), Error> {
+    // No need to fold if the line fits within the limit.
+    if line.len() <= line_length_limit {
+        Ok((line, ""))
+    } else {
+        // Otherwise look for where to split the line,
+        // starting at the limit and searching back.
+        line.char_indices()
+            .rev()
+            .skip_while(|(i, _)| *i > line_length_limit)
+            .take_while(|(i, _)| *i >= skip)
+            .find_map(|(i, c)| {
+                WSP.find(c).map(|_| i)
+            })
+            .map_or_else(
+                || {
+                    // Error if we couldn't find a place to split.
+                    Err(Error::HeaderLineCouldNotBeFolded(
+                        String::from(line)
+                    ))
+                },
+                |i| {
+                    // The first part leads up to the split point.
+                    let part = &line[..i];
+
+                    // Find the last whitespace character
+                    // starting at the split point.  This keeps one
+                    // whitespace character and drops the rest.
+                    let j = i + line[i..].char_indices()
+                        .take_while(|(_, c)| WSP.find(*c).is_some())
+                        .last()
+                        .map(|(i, _)| i)
+                        .unwrap();
+                    Ok((part, &line[j..]))
+                }
+            )
+    }
 }
 
 fn unfold_header(
@@ -89,7 +126,7 @@ fn validate_header_name(text: &str) -> Result<(), Error> {
         .map(|c| c as u32)
         .any(|c|
             c < 33
-            || c > 127
+            || c > 126
         )
     {
         Err(Error::HeaderNameContainsIllegalCharacter(text.to_string()))
@@ -210,6 +247,39 @@ pub struct MessageHeaders {
 }
 
 impl MessageHeaders {
+    pub fn add_header<N, V>(&mut self, name: N, value: V)
+        where N: Into<HeaderName>, V: Into<String>
+    {
+        let name = name.into();
+        let value = value.into();
+        self.headers.push(Header{name, value});
+    }
+
+    pub fn generate_raw_string(&self) -> Result<String, Error> {
+        let mut raw_string = String::new();
+        for header in &self.headers {
+            let line_buffer = format!("{}: {}", header.name, header.value);
+            if let Some(line_length_limit) = self.line_length_limit {
+                let mut rest = &line_buffer[..];
+                let mut skip = header.name.name.len() + 2;
+                while !rest.is_empty() {
+                    let (part, rest_out) = fold_header(
+                        rest,
+                        line_length_limit - 2,
+                        skip
+                    )?;
+                    rest = rest_out;
+                    skip = 1;
+                    write!(&mut raw_string, "{}{}", part, CRLF)?;
+                }
+            } else {
+                write!(&mut raw_string, "{}{}", line_buffer, CRLF)?;
+            }
+        }
+        write!(&mut raw_string, "{}", CRLF)?;
+        Ok(raw_string)
+    }
+
     #[must_use]
     pub fn get_all(&self) -> &Vec<Header> {
         &self.headers
@@ -223,13 +293,13 @@ impl MessageHeaders {
         self.headers.iter().fold(None, |composite, header| {
             if header.name == name {
                 Some(
-                    if let Some(mut composite) = composite {
-                        composite += ",";
-                        composite += &header.value;
-                        composite
-                    } else {
-                        header.value.clone()
-                    }
+                    composite.map_or_else(
+                        || header.value.clone(),
+                        |mut composite| {
+                            composite += ",";
+                            composite += &header.value;
+                            composite
+                        })
                 )
             } else {
                 composite
@@ -342,6 +412,37 @@ impl MessageHeaders {
         Ok(ParseStatus::Incomplete(offset))
     }
 
+    pub fn set_header<N, V>(&mut self, name: N, value: V)
+        where N: AsRef<str>, V: Into<String>
+    {
+        let name = name.as_ref();
+        let mut value = value.into();
+
+        // This code is inspired by `Vec::retain`.  We're essentially
+        // doing the same thing, except we're modifying the
+        // first matching header rather than discarding it.
+        let len = self.headers.len();
+        let mut matches = 0;
+        for i in 0..len {
+            if self.headers[i].name == name {
+                if matches == 0 {
+                    std::mem::swap(
+                        &mut self.headers[i].value,
+                        &mut value
+                    );
+                }
+                matches += 1;
+            } else if matches > 1 {
+                self.headers.swap(i - matches + 1, i);
+            }
+        }
+        if matches > 1 {
+            self.headers.truncate(len - matches + 1);
+        } else if matches == 0 {
+            self.add_header(name, value);
+        }
+    }
+
     pub fn set_line_limit(&mut self, limit: Option<usize>) {
         self.line_length_limit = limit;
     }
@@ -350,19 +451,11 @@ impl MessageHeaders {
 
 impl std::fmt::Display for MessageHeaders {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for header in &self.headers {
-            let line_buffer = format!("{}: {}", header.name, header.value);
-            if let Some(line_length_limit) = self.line_length_limit {
-                let mut rest = &line_buffer[..];
-                while !rest.is_empty() {
-                    let part = fold_header(&mut rest, line_length_limit)?;
-                    write!(f, "{}{}", part, CRLF)?;
-                }
-            } else {
-                write!(f, "{}{}", line_buffer, CRLF)?;
-            }
+        if let Ok(raw_string) = self.generate_raw_string() {
+            write!(f, "{}", raw_string)
+        } else {
+            Ok(())
         }
-        write!(f, "{}", CRLF)
     }
 }
 
@@ -387,8 +480,8 @@ mod tests {
             (false, "hello", "hell").into(),
         ];
         for test_vector in test_vectors.iter() {
-            let lhs = HeaderName::from(test_vector.lhs());
-            let rhs = HeaderName::from(test_vector.rhs());
+            let lhs = HeaderName::from(*test_vector.lhs());
+            let rhs = HeaderName::from(*test_vector.rhs());
             assert_eq!(
                 *test_vector.expected_result(),
                 (lhs == rhs)
@@ -415,8 +508,8 @@ mod tests {
             (true, "hell", "hello").into(),
         ];
         for test_vector in test_vectors.iter() {
-            let lhs = HeaderName::from(test_vector.lhs());
-            let rhs = HeaderName::from(test_vector.rhs());
+            let lhs = HeaderName::from(*test_vector.lhs());
+            let rhs = HeaderName::from(*test_vector.rhs());
             assert_eq!(
                 *test_vector.expected_result(),
                 (lhs < rhs),
@@ -611,6 +704,285 @@ mod tests {
             Ok(ParseStatus::Incomplete(0)),
             headers.parse("")
         );
+    }
+
+    #[test]
+    fn single_line_truncated() {
+        let mut headers = MessageHeaders::new();
+        assert_eq!(
+            Ok(ParseStatus::Incomplete(0)),
+            headers.parse("User-Agent: curl")
+        );
+    }
+
+    #[test]
+    fn single_line_not_truncated() {
+        let mut headers = MessageHeaders::new();
+        let input = "User-Agent: curl\r\n\r\n";
+        assert_eq!(
+            Ok(ParseStatus::Complete(input.len())),
+            headers.parse(input)
+        );
+    }
+
+    #[test]
+    fn no_headers_at_all() {
+        let mut headers = MessageHeaders::new();
+        assert_eq!(
+            Ok(ParseStatus::Complete(2)),
+            headers.parse("\r\n Something Else Not Part Of The Message")
+        );
+        assert!(headers.is_valid());
+        assert!(headers.get_all().is_empty());
+    }
+
+    #[test]
+    fn get_value_of_present_header() {
+        let mut headers = MessageHeaders::new();
+        let raw_message_headers = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        let raw_message = String::from(raw_message_headers)
+            + " Something Else Not Part Of The Message";
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message_headers.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        assert_eq!(
+            Some("www.example.com"),
+            headers.get_header_value("Host").as_deref()
+        );
+    }
+
+    #[test]
+    fn set_header_add() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        headers.set_header("X", "PogChamp");
+        assert_eq!(
+            concat!(
+                "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+                "Host: www.example.com\r\n",
+                "Accept-Language: en, mi\r\n",
+                "X: PogChamp\r\n",
+                "\r\n",
+            ),
+            headers.to_string()
+        );
+    }
+
+    #[test]
+    fn set_header_replace() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        headers.set_header("Host", "example.com");
+        assert_eq!(
+            concat!(
+                "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+                "Host: example.com\r\n",
+                "Accept-Language: en, mi\r\n",
+                "\r\n",
+            ),
+            headers.to_string()
+        );
+    }
+
+    #[test]
+    fn get_value_of_missing_header() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        assert_eq!(
+            None,
+            headers.get_header_value("PePe")
+        );
+    }
+
+    #[test]
+    fn header_with_character_less_than_33_in_name() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Feels Bad Man: LUL\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Err(Error::HeaderNameContainsIllegalCharacter(
+                String::from("Feels Bad Man")
+            )),
+            headers.parse(raw_message)
+        );
+        assert!(!headers.is_valid());
+    }
+
+    #[test]
+    fn header_with_character_greater_than_126_in_name() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "FeelsBadMan\x7f: LUL\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Err(Error::HeaderNameContainsIllegalCharacter(
+                String::from("FeelsBadMan\x7f")
+            )),
+            headers.parse(raw_message)
+        );
+    }
+
+    #[test]
+    fn header_with_colon_in_name() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Feels:BadMan: LUL\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        let header_collection = headers.get_all();
+        named_tuple!(
+            struct ExpectedHeader {
+                name: &'static str,
+                value: &'static str,
+            }
+        );
+        let expected_headers: &[ExpectedHeader] = &[
+            ("User-Agent", "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3").into(),
+            ("Host", "www.example.com").into(),
+            ("Feels", "BadMan: LUL").into(),
+            ("Accept-Language", "en, mi").into(),
+        ];
+        assert_eq!(expected_headers.len(), header_collection.len());
+        expected_headers.iter()
+            .zip(header_collection.iter())
+            .for_each(|(expected_header, actual_header)| {
+                assert_eq!(*expected_header.name(), actual_header.name);
+                assert_eq!(*expected_header.value(), actual_header.value);
+            });
+    }
+
+    #[test]
+    fn header_value_unfolding_single_wsp() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "Subject: This\r\n",
+            " is a test\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        assert_eq!(
+            Some("This is a test"),
+            headers.get_header_value("Subject").as_deref()
+        );
+    }
+
+    #[test]
+    fn header_value_unfolding_multiple_wsp() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "Subject: This\r\n",
+            "    is a test\r\n",
+            "\r\n",
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.is_valid());
+        assert_eq!(
+            Some("This is a test"),
+            headers.get_header_value("Subject").as_deref()
+        );
+    }
+
+    #[test]
+    fn fold_line_that_would_exceed_limit() {
+        let header_name = "X";
+        named_tuple!(
+            struct TestVector {
+                header_value: &'static str,
+                expected_lines: Option<&'static [&'static str]>,
+            }
+        );
+        let test_vectors: &[TestVector] = &[
+            // ...................... Some(&["..........", "..........", "..........", "", ""][..])).into(),
+            ("Hello!",                Some(&["X: Hello!" ,                             "", ""][..])).into(),
+            ("Hello!!",               Some(&["X: Hello!!",                             "", ""][..])).into(),
+            ("Hello!!!",              None                                                         ).into(),
+            ("Hello, World!",         Some(&["X: Hello," , " World!"   ,               "", ""][..])).into(),
+            ("This is even longer!",  Some(&["X: This is", " even"     , " longer!"  , "", ""][..])).into(),
+            ("This is even long er!", Some(&["X: This is", " even long", " er!"      , "", ""][..])).into(),
+            ("This is evenlonger!",   None                                                         ).into(),
+            ("sadfjkasdfjlkasdfjla",  None                                                         ).into(),
+        ];
+        for test_vector in test_vectors {
+            let mut headers = MessageHeaders::new();
+            headers.set_line_limit(Some(12));
+            headers.set_header(header_name, *test_vector.header_value());
+            let raw_headers = headers.generate_raw_string();
+            if let Some(expected_lines) = test_vector.expected_lines() {
+                assert!(raw_headers.is_ok());
+                let raw_headers = raw_headers.unwrap();
+                let actual_lines = raw_headers.split("\r\n").collect::<Vec<&str>>();
+                assert_eq!(*expected_lines, actual_lines);
+            } else {
+                assert!(raw_headers.is_err());
+            }
+        }
     }
 
 }
