@@ -132,11 +132,10 @@ fn validate_header_name(text: &str) -> Result<(), Error> {
 
 fn validate_header_value(text: &str) -> Result<(), Error> {
     if text.chars()
-        .map(|c| c as u32)
         .all(|c|
-            c == 9
-            || c == 32
-            || ((c > 32) && (c < 127))
+            c == '\t'
+            || c == ' '
+            || (c as char).is_ascii_graphic()
         )
     {
         Ok(())
