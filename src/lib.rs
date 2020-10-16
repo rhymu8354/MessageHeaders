@@ -151,7 +151,7 @@ fn validate_header_value(text: &str) -> Result<(), Error> {
     }
 }
 
-#[derive(Debug, Default, Eq)]
+#[derive(Clone, Debug, Default, Eq)]
 pub struct HeaderName {
     name: String,
 }
@@ -214,7 +214,7 @@ impl PartialOrd for HeaderName {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Header {
     pub name: HeaderName,
     pub value: String,
@@ -245,7 +245,7 @@ pub enum HeaderMultiMode {
     MultiLine,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct MessageHeaders {
     headers: Vec<Header>,
     line_length_limit: Option<usize>,
@@ -367,6 +367,20 @@ impl MessageHeaders {
         })
     }
 
+    pub fn has_header_token<T>(
+        &self,
+        name: T,
+        token: T
+    ) -> bool
+        where T: AsRef<str>
+    {
+        let token = token.as_ref();
+        let normalized_token = token.to_ascii_lowercase();
+        self.get_header_tokens(name)
+            .iter()
+            .any(|token_in_header| *token_in_header == normalized_token)
+    }
+
     #[must_use]
     pub fn has_header<T>(&self, name: T) -> bool
         where T: AsRef<str>
@@ -448,9 +462,9 @@ impl MessageHeaders {
                 Ok(mut header) => {
                     // Look ahead in the raw message and perform line unfolding
                     // if we see any lines that begin with whitespace.
-                    offset += line_terminator + CRLF.len();
+                    let next_offset = offset + line_terminator + CRLF.len();
                     if let Some((value, consumed)) = unfold_header(
-                        &raw_message[offset..],
+                        &raw_message[next_offset..],
                         header.value
                     )? {
                         // Remove any whitespace that might be at the beginning
@@ -458,7 +472,7 @@ impl MessageHeaders {
                         // header.
                         header.value = value.trim().to_string();
                         self.headers.push(header);
-                        offset += consumed;
+                        offset = next_offset + consumed;
                     } else {
                         return Ok(ParseStatus::Incomplete(offset));
                     }
@@ -1368,6 +1382,100 @@ mod tests {
         assert_eq!(
             &[] as &[String],
             headers.get_header_tokens("Spam")
+        );
+    }
+
+    #[test]
+    fn has_header_token() {
+        let raw_message = concat!(
+            "Foo: bar, Spam,  heLLo\r\n",
+            "Bar: Foo \r\n",
+            "Spam:   \t  \r\n",
+            "\r\n",
+        );
+        let mut headers = MessageHeaders::new();
+        assert_eq!(
+            Ok(ParseStatus::Complete(raw_message.len())),
+            headers.parse(raw_message)
+        );
+        assert!(headers.has_header_token("Foo", "bar"));
+        assert!(headers.has_header_token("Foo", "Bar"));
+        assert!(headers.has_header_token("Foo", "spam"));
+        assert!(headers.has_header_token("Foo", "hello"));
+        assert!(!headers.has_header_token("Foo", "xyz"));
+        assert!(!headers.has_header_token("Foo", "secret_to_the_universe"));
+        assert!(headers.has_header_token("Bar", "foo"));
+        assert!(!headers.has_header_token("Bar", "spam"));
+        assert!(!headers.has_header_token("Spam", "foo"));
+        assert!(!headers.has_header_token("Spam", "spam"));
+    }
+
+    #[test]
+    fn clone_headers() {
+        let mut original_headers = MessageHeaders::new();
+        original_headers.set_header("Foo", "Bar");
+        original_headers.set_header("Hello", "World");
+        let mut headers_copy = original_headers.clone();
+        headers_copy.set_header("Hello", "PePe");
+        assert_eq!(Some("Bar"), original_headers.get_header_value("Foo").as_deref());
+        assert_eq!(Some("World"), original_headers.get_header_value("Hello").as_deref());
+        assert_eq!(Some("Bar"), headers_copy.get_header_value("Foo").as_deref());
+        assert_eq!(Some("PePe"), headers_copy.get_header_value("Hello").as_deref());
+    }
+
+    #[test]
+    fn http_client_request_message_in_two_parts_divided_between_header_lines() {
+        let mut headers = MessageHeaders::new();
+        let raw_message_pieces = &[
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n"
+        ][..];
+        assert_eq!(
+            Ok(ParseStatus::Incomplete(raw_message_pieces[0].len())),
+            headers.parse(
+                String::from(raw_message_pieces[0])
+                + raw_message_pieces[1]
+            )
+        );
+        assert_eq!(
+            Ok(ParseStatus::Complete(
+                raw_message_pieces[1].len()
+                + raw_message_pieces[2].len()
+                + raw_message_pieces[3].len()
+            )),
+            headers.parse(
+                String::from(raw_message_pieces[1])
+                + raw_message_pieces[2]
+                + raw_message_pieces[3]
+            )
+        );
+        assert!(headers.is_valid());
+        let header_collection = headers.get_all();
+        named_tuple!(
+            struct ExpectedHeader {
+                name: &'static str,
+                value: &'static str,
+            }
+        );
+        let expected_headers: &[ExpectedHeader] = &[
+            ("User-Agent", "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3").into(),
+            ("Host", "www.example.com").into(),
+            ("Accept-Language", "en, mi").into(),
+        ];
+        assert_eq!(expected_headers.len(), header_collection.len());
+        expected_headers.iter()
+            .zip(header_collection.iter())
+            .for_each(|(expected_header, actual_header)| {
+                assert_eq!(*expected_header.name(), actual_header.name);
+                assert_eq!(*expected_header.value(), actual_header.value);
+            });
+        assert!(headers.has_header("Host"));
+        assert!(!headers.has_header("Foobar"));
+        assert_eq!(
+            Ok(raw_message_pieces.iter().copied().collect::<String>()),
+            headers.generate()
         );
     }
 
