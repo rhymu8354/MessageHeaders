@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::non_ascii_literal)]
-#![allow(clippy::missing_errors_doc)]
 
 #[cfg(test)]
 #[macro_use]
@@ -8,7 +7,7 @@ extern crate named_tuple;
 
 mod error;
 
-use error::Error;
+pub use error::Error;
 use std::fmt::Write;
 
 // These are the characters that are considered whitespace and
@@ -151,14 +150,15 @@ fn validate_header_value(
     }
 }
 
+/// Names of headers in Internet messages are case insensitive.
+/// This type is used to represent those names in such a way that
+/// case insensitivity is considered for equality and order.
 #[derive(Clone, Debug, Default, Eq)]
-pub struct HeaderName {
-    name: String,
-}
+pub struct HeaderName(String);
 
 impl std::fmt::Display for HeaderName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -166,35 +166,33 @@ impl<T> From<T> for HeaderName
     where T: AsRef<str>
 {
     fn from(name: T) -> Self {
-        Self{
-            name: name.as_ref().to_string(),
-        }
+        Self(name.as_ref().to_string())
     }
 }
 
 impl PartialEq for HeaderName {
     fn eq(&self, rhs: &Self) -> bool {
-        self.name.eq_ignore_ascii_case(&rhs.name)
+        self.0.eq_ignore_ascii_case(&rhs.0)
     }
 }
 
 impl PartialEq<&str> for HeaderName {
     fn eq(&self, rhs: &&str) -> bool {
-        self.name.eq_ignore_ascii_case(*rhs)
+        self.0.eq_ignore_ascii_case(*rhs)
     }
 }
 
 impl PartialEq<HeaderName> for &str {
     fn eq(&self, rhs: &HeaderName) -> bool {
-        self.eq_ignore_ascii_case(&rhs.name)
+        self.eq_ignore_ascii_case(&rhs.0)
     }
 }
 
 impl PartialOrd for HeaderName {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(
-            match self.name.chars()
-                .zip(other.name.chars())
+            match self.0.chars()
+                .zip(other.0.chars())
                 .find_map(|(lhs, rhs)| {
                     match lhs.to_ascii_lowercase()
                         .cmp(&rhs.to_ascii_lowercase())
@@ -206,29 +204,97 @@ impl PartialOrd for HeaderName {
             {
                 Some(ordering) => ordering,
                 None => {
-                    self.name.len()
-                        .cmp(&other.name.len())
+                    self.0.len()
+                        .cmp(&other.0.len())
                 },
             }
         )
     }
 }
 
+/// This represents one line of the headers portion of an Internet message.  It
+/// consists of a case-insensitive name and a value, which may contain parts
+/// separated by commas.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Header {
-    pub name: HeaderName,
-    pub value: String,
+    name: HeaderName,
+    value: String,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 /// This enumerates the possible non-error states `MessageHeaders` can be in
 /// after parsing a bit of input.
+///
+/// # Examples
+///
+/// ```rust
+/// # extern crate message_headers;
+/// use message_headers::{MessageHeaders, ParseStatus};
+///
+/// # fn main() -> Result<(), message_headers::Error> {
+/// let mut headers = MessageHeaders::new();
+///
+/// // `parse` does not consume first line because the next line
+/// // it hasn't seen yet might contain part of the "From" header.
+/// assert_eq!(
+///     ParseStatus::Incomplete(0),
+///     headers.parse("From: joe@example.com\r\n")?
+/// );
+///
+/// // So we re-send the "From" line along with the content that follows.
+/// // At this point, `parse` knows it has the full "From" header, and
+/// // consumes it, but not the "To" header, since the next line might
+/// // be a continuation of it.
+/// assert_eq!(
+///     ParseStatus::Incomplete(23),
+///     headers.parse(concat!(
+///         "From: joe@example.com\r\n",
+///         "To: sal@example.com\r\n",
+///     ))?
+/// );
+///
+/// // So we re-send the "To" line along with the content that follows.
+/// // At this point, `parse` knows it has the full "To" header, and
+/// // consumes it, but not the "Subject" header, since the next line might
+/// // be a continuation of it.
+/// assert_eq!(
+///     ParseStatus::Incomplete(21),
+///     headers.parse(concat!(
+///         "To: sal@example.com\r\n",
+///         "Subject: Hello,\r\n",
+///     ))?
+/// );
+///
+/// // So we re-send the "Subject" line along with the content that
+/// // follows.  At this point, `parse` still doesn't know it has the
+/// // full "Subject" header, so nothing is consumed.
+/// assert_eq!(
+///     ParseStatus::Incomplete(0),
+///     headers.parse(concat!(
+///         "Subject: Hello,\r\n",
+///         " World!\r\n",
+///     ))?
+/// );
+///
+/// // So we re-send again with even more content.  At this point,
+/// // `parse` sees the empty line separating headers from body,
+/// // so it can finally consume the "Subject" header as well as
+/// // indicate that parsing the headers is complete.
+/// assert_eq!(
+///     ParseStatus::Complete(28),
+///     headers.parse(concat!(
+///         "Subject: Hello,\r\n",
+///         " World!\r\n",
+///         "\r\n",
+///     ))?
+/// );
+/// # Ok(())
+/// # }
+/// ```
 pub enum ParseStatus {
     /// The body was found at the attached byte offset in the last input
     /// string.
     Complete(usize),
-
-    // TODO: Provide a working example below.
 
     /// The body was not found, but all characters up to but not including the
     /// attached byte offset were parsed.
@@ -239,9 +305,71 @@ pub enum ParseStatus {
     Incomplete(usize),
 }
 
+/// This enumerates the ways in which a multi-value header may be represented
+/// in the generated text.
 #[derive(Debug, Copy, Clone)]
 pub enum HeaderMultiMode {
+    /// Put all values in the same header line (possibly folded) and separate
+    /// the values with commas.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate message_headers;
+    /// use message_headers::{MessageHeaders, HeaderMultiMode};
+    ///
+    /// # fn main() -> Result<(), message_headers::Error> {
+    /// let via: Vec<String> = [
+    ///     "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+    ///     "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+    ///     "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+    /// ].iter().map(|s| String::from(*s)).collect();
+    /// let mut headers = MessageHeaders::new();
+    /// headers.set_header_multi_value("Via", via.clone(), HeaderMultiMode::OneLine);
+    /// assert_eq!(
+    ///     Ok(concat!(
+    ///         "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
+    ///             "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
+    ///             "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+    ///         "\r\n",
+    ///     )),
+    ///     headers.generate().as_deref()
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     OneLine,
+
+    /// Put each value in a separate header line (each possibly folded)
+    /// where all the header lines have the same header name.  Note that
+    /// the higher-layer protocol may have restrictions on what kinds of
+    /// headers may express multiple values in this way.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate message_headers;
+    /// use message_headers::{MessageHeaders, HeaderMultiMode};
+    ///
+    /// # fn main() -> Result<(), message_headers::Error> {
+    /// let via: Vec<String> = [
+    ///     "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
+    ///     "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
+    ///     "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
+    /// ].iter().map(|s| String::from(*s)).collect();
+    /// let mut headers = MessageHeaders::new();
+    /// headers.set_header_multi_value("Via", via.clone(), HeaderMultiMode::MultiLine);
+    /// assert_eq!(
+    ///     concat!(
+    ///         "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
+    ///         "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
+    ///         "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
+    ///         "\r\n",
+    ///     ),
+    ///     headers.generate()?
+    /// );
+    /// # Ok(())
+    /// # }
     MultiLine,
 }
 
@@ -249,6 +377,9 @@ pub enum HeaderMultiMode {
 pub struct MessageHeaders {
     headers: Vec<Header>,
     line_length_limit: Option<usize>,
+
+    // TODO: Do we even need this flag (and the corresponding `is_valid`
+    // function) at all?
     valid: bool,
 }
 
@@ -292,7 +423,7 @@ impl MessageHeaders {
             let line_buffer = format!("{}: {}", header.name, header.value);
             if let Some(line_length_limit) = self.line_length_limit {
                 let mut rest = &line_buffer[..];
-                let mut skip = header.name.name.len() + 2;
+                let mut skip = header.name.0.len() + 2;
                 while !rest.is_empty() {
                     let (part, rest_out) = fold_header(
                         rest,
@@ -415,9 +546,6 @@ impl MessageHeaders {
         let raw_message = raw_message.as_ref();
         while offset < raw_message.len() {
             // Find the end of the current line.
-            //
-            // TODO: Both this block and the next detect header lines that are
-            // too long.  Try to rewrite this to remove the redundancy.
             let line_terminator = &raw_message[offset..].find(CRLF);
             if line_terminator.is_none() {
                 if let Some(line_length_limit) = self.line_length_limit {
@@ -1214,7 +1342,7 @@ mod tests {
             "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
             "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1"
         ].iter().map(|s| String::from(*s)).collect();
-        let to : Vec<String>= [
+        let to: Vec<String> = [
             "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
         ].iter().map(|s| String::from(*s)).collect();
         let mut headers = MessageHeaders::new();
