@@ -121,13 +121,8 @@ fn unfold_header(
 }
 
 fn validate_header_name(text: &str) -> Result<(), Error> {
-    // TODO: check if is_ascii_graphic will work here.
     if text.chars()
-        .map(|c| c as u32)
-        .any(|c|
-            c < 33
-            || c > 126
-        )
+        .any(|c| !c.is_ascii_graphic())
     {
         Err(Error::HeaderNameContainsIllegalCharacter(text.to_string()))
     } else {
@@ -136,7 +131,6 @@ fn validate_header_name(text: &str) -> Result<(), Error> {
 }
 
 fn validate_header_value(text: &str) -> Result<(), Error> {
-    // TODO: check if is_ascii_graphic will work here.
     if text.chars()
         .map(|c| c as u32)
         .all(|c|
