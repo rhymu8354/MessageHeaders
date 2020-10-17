@@ -1,4 +1,42 @@
+//! This crate provides types for parsing and generating the headers of
+//! Internet messages, such as e-mail, HTTP requests or responses, and SIP
+//! messages.  The typical format of these headers is described in [IETF RFC
+//! 5322](https://tools.ietf.org/html/rfc5322).  Note that specific Internet
+//! standards may leverage this format but make exceptions, extensions, or
+//! other changes to it.
+//!
+//! To parse a message, construct a [`MessageHeaders`] value using
+//! [`MessageHeaders::new`], and then start feeding it input text via
+//! [`MessageHeaders::parse`].  Each call will consume zero or more of the
+//! input characters.  Input is only consumed if enough is provided for the
+//! parser to determine when all of one or more headers has been provided.  Any
+//! unused input should be included in the next call along with additional
+//! input to continue parsing.  Parsing is complete once the message body is
+//! found.
+//!
+//! To generate a message, construct a [`MessageHeaders`] value using
+//! [`MessageHeaders::new`], fill in headers using
+//! [`MessageHeaders::add_header`] and other related functions, and emit
+//! the final text using [`MessageHeaders::generate`].
+//!
+//! By default, there is no constraint set on the lengths of header lines.
+//! This can cause issues in some places, such as servers receiving input from
+//! untrusted connections.  An attacker might feed in a constant stream of
+//! characters that never includes a line ending, causing the server to exceed
+//! its memory allocation limits.  To prevent this, the
+//! [`MessageHeaders::set_line_limit`] function can be used to set a constraint
+//! for header line length, both for parsing and generation.
+//!
+//! [`MessageHeaders`]: struct.MessageHeaders.html
+//! [`MessageHeaders::new`]: struct.MessageHeaders.html#method.new
+//! [`MessageHeaders::parse`]: struct.MessageHeaders.html#method.parse
+//! [`MessageHeaders::add_header`]: struct.MessageHeaders.html#method.add_header
+//! [`MessageHeaders::generate`]: struct.MessageHeaders.html#method.generate
+//! [`MessageHeaders::set_line_limit`]: struct.MessageHeaders.html#method.set_line_limit
+
+// In general, we want lots of warnings because we learn a lot from them.
 #![warn(clippy::pedantic)]
+// However, this is 2020 and we should be happy and safe with Unicode, IMHO.
 #![allow(clippy::non_ascii_literal)]
 
 #[cfg(test)]
@@ -150,6 +188,9 @@ fn validate_header_value(
     }
 }
 
+/// This is a newtype wrapping a `String` in order to handle it
+/// as an Internet message header name.
+///
 /// Names of headers in Internet messages are case insensitive.
 /// This type is used to represent those names in such a way that
 /// case insensitivity is considered for equality and order.
@@ -217,8 +258,14 @@ impl PartialOrd for HeaderName {
 /// separated by commas.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Header {
-    name: HeaderName,
-    value: String,
+    /// This is the name of the header.  It is case-insensitive.
+    pub name: HeaderName,
+
+    /// This is the value of the header.  When parsed from text, or in text
+    /// generated from it, this string may span (or fold across) multiple
+    /// lines.  Also, in some contexts, it may contain multiple values,
+    /// in which case the values are commonly separated by commas.
+    pub value: String,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -373,17 +420,22 @@ pub enum HeaderMultiMode {
     MultiLine,
 }
 
+/// This type is used to parse and generate the headers of Internet messages,
+/// which consist of text lines, with an empty line separating the headers from
+/// the body.  The format is specified in [IETF RFC
+/// 5322](https://tools.ietf.org/html/rfc5322).
 #[derive(Clone, Debug, Default)]
 pub struct MessageHeaders {
     headers: Vec<Header>,
     line_length_limit: Option<usize>,
-
-    // TODO: Do we even need this flag (and the corresponding `is_valid`
-    // function) at all?
     valid: bool,
 }
 
 impl MessageHeaders {
+    /// Append a header with the given name and value.  This does not change or
+    /// remove any previously added headers, even if they have the same name.
+    /// To replace a previously added header, use
+    /// [`set_header`](#method.set_header) instead.
     pub fn add_header<N, V>(&mut self, name: N, value: V)
         where N: Into<HeaderName>, V: Into<String>
     {
@@ -392,6 +444,12 @@ impl MessageHeaders {
         self.headers.push(Header{name, value});
     }
 
+    /// Append one or more headers with the given name and values derived from
+    /// the given vector, depending on the given mode (see
+    /// [`HeaderMultiMode`](enum.HeaderMultiMode.html) for more information).
+    /// This does not change or remove any previously added headers, even if
+    /// they have the same name.  To replace a previously added header, use
+    /// [`set_header_multi_value`](#method.set_header_multi_value) instead.
     pub fn add_header_multi_value<N, V>(
         &mut self,
         name: N,
@@ -417,6 +475,30 @@ impl MessageHeaders {
         }
     }
 
+    /// Produce the text string form of the message, according to
+    /// the rules of RFC 5322:
+    ///
+    /// * Each header is separated by a carriage-return line-feed
+    ///   sequence (CRLF).
+    /// * Headers may be folded onto multiple lines at whitespace
+    ///   characters (which are strictly space ('\x20') and horizontal
+    ///   tab ('\x09').
+    /// * The first line of a header consists of the header name
+    ///   followed by a colon (':') followed by a space ('\x20')
+    ///   followed by part or all of the header value.
+    /// * After all headers, an empty line is placed to mark where
+    ///   the body begins.
+    ///
+    /// # Errors
+    ///
+    /// `Error::HeaderLineCouldNotBeFolded` is returned if the generator
+    /// is configured with a line limit constraint and one or more headers
+    /// are too long and cannot be folded to fit within the constraint.
+    ///
+    /// While technically it shouldn't happen, logically we may return
+    /// `Error::StringFormat` if one of the internal string formatting
+    /// functions should fail (which they shouldn't unless something
+    /// used internally doesn't implement `Display` properly.
     pub fn generate(&self) -> Result<String, Error> {
         let mut raw_string = String::new();
         for header in &self.headers {
@@ -442,11 +524,14 @@ impl MessageHeaders {
         Ok(raw_string)
     }
 
+    /// Borrow the list of headers.
     #[must_use]
     pub fn get_all(&self) -> &Vec<Header> {
         &self.headers
     }
 
+    /// Produce a list of the values for the headers with the given name.
+    /// If no headers have the given name, an empty list is returned.
     #[must_use]
     pub fn get_header_multi_value<T>(&self, name: T) -> Vec<String>
         where T: AsRef<str>
@@ -463,6 +548,9 @@ impl MessageHeaders {
             .collect()
     }
 
+    /// Take the value of the header with the given name, interpret it as a
+    /// comma-separated list of values, and produce that list.  If no headers
+    /// have the given name, an empty list is returned.
     #[must_use]
     pub fn get_header_tokens<T>(&self, name: T) -> Vec<String>
         where T: AsRef<str>
@@ -476,6 +564,9 @@ impl MessageHeaders {
             .collect()
     }
 
+    /// Produce the value for the header with the given name, if any.
+    /// If there are two or more headers with the same name, the produced
+    /// string will be the joining of their values with commas.
     #[must_use]
     pub fn get_header_value<T>(&self, name: T) -> Option<String>
         where T: AsRef<str>
@@ -498,6 +589,9 @@ impl MessageHeaders {
         })
     }
 
+    /// This is a convenience function which essentially looks up the tokens
+    /// in a header using [`get_header_tokens`](#method.get_header_tokens)
+    /// and searches them to see if the given token is among them.
     pub fn has_header_token<T>(
         &self,
         name: T,
@@ -512,6 +606,7 @@ impl MessageHeaders {
             .any(|token_in_header| *token_in_header == normalized_token)
     }
 
+    /// Determine whether or not the given header is present.
     #[must_use]
     pub fn has_header<T>(&self, name: T) -> bool
         where T: AsRef<str>
@@ -522,11 +617,17 @@ impl MessageHeaders {
         })
     }
 
+    /// Determine whether or not the previous input fed to the
+    /// [`parse`](#method.parse) function was valid.
+    ///
+    /// TODO: Consider removing this, since `parse` now returns a `Result`
+    /// that always indicates an error when invalid input is detected.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.valid
     }
 
+    /// Create a new instance with no headers in it.
     #[must_use]
     pub fn new() -> Self {
         Self{
@@ -536,6 +637,23 @@ impl MessageHeaders {
         }
     }
 
+    /// Feed more Internet message text into the parser, building the
+    /// collection of headers internally, and detecting when the end of
+    /// the headers and the beginning of the body is found.
+    ///
+    /// See [`ParseStatus`](enum.ParseStatus.html) for details on what
+    /// this function returns to indicate the result of the parsing.
+    ///
+    /// # Errors
+    ///
+    /// * `HeaderLineTooLong` &nash; the parser is configured
+    ///   with a line length constraint and the input exceeds it on a line
+    /// * `HeaderLineMissingColon` &ndash; there is no colon between
+    ///   the name and value of a header line
+    /// * `HeaderNameContainsIllegalCharacter` &ndash; the name of a
+    ///   header contains an illegal character
+    /// * `HeaderValueContainsIllegalCharacter` &ndash; the value of a
+    ///   header contains an illegal character
     pub fn parse<T>(
         &mut self,
         raw_message: T
@@ -617,6 +735,7 @@ impl MessageHeaders {
         Ok(ParseStatus::Incomplete(offset))
     }
 
+    /// Remove all headers with the given name.
     pub fn remove_header<N>(&mut self, name: N)
         where N: AsRef<str>
     {
@@ -626,6 +745,11 @@ impl MessageHeaders {
         });
     }
 
+    /// Add or replace a header with the given name and value.  If one or more
+    /// previously added headers has the same name, the first one is changed to
+    /// hold the given value, and the others are removed.  To add a new header
+    /// without replacing or removing previously added ones with the same name,
+    /// use [`add_header`](#method.add_header) instead.
     pub fn set_header<N, V>(&mut self, name: N, value: V)
         where N: AsRef<str>, V: Into<String>
     {
@@ -657,6 +781,14 @@ impl MessageHeaders {
         }
     }
 
+    /// Add or replace one or more headers with the given name and values
+    /// derived from the given vector, depending on the given mode (see
+    /// [`HeaderMultiMode`](enum.HeaderMultiMode.html) for more information).
+    /// If one or more previously added headers has the same name, the first
+    /// one is changed to hold the given value(s), and the others are removed.
+    /// To add new headers without replacing or removing previously added ones
+    /// with the same name, use
+    /// [`add_header_multi_value`](#method.add_header_multi_value) instead.
     pub fn set_header_multi_value<N, V>(
         &mut self,
         name: N,
@@ -686,6 +818,9 @@ impl MessageHeaders {
         }
     }
 
+    /// This configures the parser and generator to constrain the lengths
+    /// of header lines to no more than the given number, if any.  Setting
+    /// `None` removes any constraint.
     pub fn set_line_limit(&mut self, limit: Option<usize>) {
         self.line_length_limit = limit;
     }
