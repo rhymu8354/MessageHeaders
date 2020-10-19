@@ -48,16 +48,18 @@ mod error;
 pub use error::Error;
 use std::fmt::Write;
 
+// This is the required line terminator for internet message header lines.
+const CRLF: &str = "\r\n";
+
 // These are the characters that are considered whitespace and
 // should be stripped off by the Strip() function.
 //
 // Name of "WSP" chosen to match the symbol name from
 // RFC 5322 (https://tools.ietf.org/html/rfc5322) which refers
 // to this specific character set.
-const WSP: &str = " \t";
-
-// This is the required line terminator for internet message header lines.
-const CRLF: &str = "\r\n";
+fn is_wsp(c: char) -> bool {
+    c == ' ' || c == '\t'
+}
 
 fn separate_header_name_and_value(line: &str) -> Result<Header, Error> {
     match line.find(':') {
@@ -89,7 +91,7 @@ fn fold_header(
             .skip_while(|(i, _)| *i > line_length_limit)
             .take_while(|(i, _)| *i >= skip)
             .find_map(|(i, c)| {
-                WSP.find(c).map(|_| i)
+                if is_wsp(c) { Some(i) } else { None }
             })
             .map_or_else(
                 || {
@@ -106,7 +108,7 @@ fn fold_header(
                     // starting at the split point.  This keeps one
                     // whitespace character and drops the rest.
                     let j = i + line[i..].char_indices()
-                        .take_while(|(_, c)| WSP.find(*c).is_some())
+                        .take_while(|(_, c)| is_wsp(*c))
                         .last()
                         .map(|(i, _)| i)
                         .unwrap();
@@ -134,12 +136,7 @@ fn unfold_header(
         // If the next line begins with whitespace, unfold the line
         if
             line_terminator > 0  // line is not empty
-            && WSP.find(         // and we can find whitespace
-                raw_message      // in the message
-                    .chars()
-                    .next()      // beginning at the line start
-                    .unwrap()
-            ).is_some()
+            && raw_message.starts_with(is_wsp) // and the message starts with a WSP character
         {
             // Append a single space to the header value.
             header.value.push(' ');
@@ -225,25 +222,17 @@ impl PartialEq<HeaderName> for &str {
 
 impl PartialOrd for HeaderName {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(
-            match self.0.chars()
-                .zip(other.0.chars())
-                .find_map(|(lhs, rhs)| {
-                    match lhs.to_ascii_lowercase()
-                        .cmp(&rhs.to_ascii_lowercase())
-                    {
-                        std::cmp::Ordering::Equal => None,
-                        ordering => Some(ordering),
-                    }
-                })
-            {
-                Some(ordering) => ordering,
-                None => {
-                    self.0.len()
-                        .cmp(&other.0.len())
-                },
-            }
-        )
+        self.0.chars()
+            .zip(other.0.chars())
+            .find_map(|(lhs, rhs)| {
+                match lhs.to_ascii_lowercase()
+                    .cmp(&rhs.to_ascii_lowercase())
+                {
+                    std::cmp::Ordering::Equal => None,
+                    ordering => Some(ordering),
+                }
+            })
+            .or_else(|| self.0.len().partial_cmp(&other.0.len()))
     }
 }
 
