@@ -34,9 +34,8 @@
 //! [`MessageHeaders::generate`]: struct.MessageHeaders.html#method.generate
 //! [`MessageHeaders::set_line_limit`]: struct.MessageHeaders.html#method.set_line_limit
 
-// In general, we want lots of warnings because we learn a lot from them.
 #![warn(clippy::pedantic)]
-// However, this is 2020 and we should be happy and safe with Unicode, IMHO.
+#![warn(missing_docs)]
 #![allow(clippy::non_ascii_literal)]
 
 #[cfg(test)]

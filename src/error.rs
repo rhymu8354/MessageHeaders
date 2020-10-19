@@ -23,7 +23,15 @@ pub enum Error {
     /// The header with the attached name has a value containing an illegal
     /// character, found in the attached segment.
     #[error("header value contains an illegal character")]
-    HeaderValueContainsIllegalCharacter{name: HeaderName, value_segment: String},
+    HeaderValueContainsIllegalCharacter{
+        /// This is the name of the header whose value contained an illegal
+        /// character.
+        name: HeaderName,
+
+        /// This is the part of the header value containing the illegal
+        /// character.
+        value_segment: String
+    },
 
     /// The attached string is a header, or part of a header, that is
     /// too long and cannot be folded to fit.
