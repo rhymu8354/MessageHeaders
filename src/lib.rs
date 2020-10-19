@@ -222,25 +222,17 @@ impl PartialEq<HeaderName> for &str {
 
 impl PartialOrd for HeaderName {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(
-            match self.0.chars()
-                .zip(other.0.chars())
-                .find_map(|(lhs, rhs)| {
-                    match lhs.to_ascii_lowercase()
-                        .cmp(&rhs.to_ascii_lowercase())
-                    {
-                        std::cmp::Ordering::Equal => None,
-                        ordering => Some(ordering),
-                    }
-                })
-            {
-                Some(ordering) => ordering,
-                None => {
-                    self.0.len()
-                        .cmp(&other.0.len())
-                },
-            }
-        )
+        self.0.chars()
+            .zip(other.0.chars())
+            .find_map(|(lhs, rhs)| {
+                match lhs.to_ascii_lowercase()
+                    .cmp(&rhs.to_ascii_lowercase())
+                {
+                    std::cmp::Ordering::Equal => None,
+                    ordering => Some(ordering),
+                }
+            })
+            .or_else(|| self.0.len().partial_cmp(&other.0.len()))
     }
 }
 
