@@ -269,10 +269,10 @@ pub struct Header {
 /// # Examples
 ///
 /// ```rust
-/// # extern crate message_headers;
-/// use message_headers::{MessageHeaders, ParseStatus};
+/// # extern crate rhymessage;
+/// use rhymessage::{MessageHeaders, ParseStatus};
 ///
-/// # fn main() -> Result<(), message_headers::Error> {
+/// # fn main() -> Result<(), rhymessage::Error> {
 /// let mut headers = MessageHeaders::new();
 ///
 /// // `parse` does not consume first line because the next line
@@ -356,10 +356,10 @@ pub enum HeaderMultiMode {
     /// # Examples
     ///
     /// ```rust
-    /// # extern crate message_headers;
-    /// use message_headers::{MessageHeaders, HeaderMultiMode};
+    /// # extern crate rhymessage;
+    /// use rhymessage::{MessageHeaders, HeaderMultiMode};
     ///
-    /// # fn main() -> Result<(), message_headers::Error> {
+    /// # fn main() -> Result<(), rhymessage::Error> {
     /// let via: Vec<String> = [
     ///     "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
     ///     "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
@@ -389,10 +389,10 @@ pub enum HeaderMultiMode {
     /// # Examples
     ///
     /// ```rust
-    /// # extern crate message_headers;
-    /// use message_headers::{MessageHeaders, HeaderMultiMode};
+    /// # extern crate rhymessage;
+    /// use rhymessage::{MessageHeaders, HeaderMultiMode};
     ///
-    /// # fn main() -> Result<(), message_headers::Error> {
+    /// # fn main() -> Result<(), rhymessage::Error> {
     /// let via: Vec<String> = [
     ///     "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3",
     ///     "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
