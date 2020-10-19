@@ -197,12 +197,6 @@ fn validate_header_value(
 #[derive(Clone, Debug, Default, Eq)]
 pub struct HeaderName(String);
 
-impl std::fmt::Display for HeaderName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl<T> From<T> for HeaderName
     where T: AsRef<str>
 {
@@ -501,7 +495,7 @@ impl MessageHeaders {
     pub fn generate(&self) -> Result<String, Error> {
         let mut raw_string = String::new();
         for header in &self.headers {
-            let line_buffer = format!("{}: {}", header.name, header.value);
+            let line_buffer = format!("{}: {}", header.name.0, header.value);
             if let Some(line_length_limit) = self.line_length_limit {
                 let mut rest = &line_buffer[..];
                 let mut skip = header.name.0.len() + 2;
