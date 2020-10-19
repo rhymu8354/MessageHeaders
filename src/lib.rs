@@ -800,16 +800,6 @@ impl MessageHeaders {
 
 }
 
-impl std::fmt::Display for MessageHeaders {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(raw_string) = self.generate() {
-            write!(f, "{}", raw_string)
-        } else {
-            Ok(())
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -903,7 +893,7 @@ mod tests {
             });
         assert!(headers.has_header("Host"));
         assert!(!headers.has_header("Foobar"));
-        assert_eq!(raw_message, headers.to_string());
+        assert_eq!(Ok(raw_message), headers.generate().as_deref());
     }
 
     #[test]
@@ -952,7 +942,7 @@ mod tests {
             });
         assert!(headers.has_header("Last-Modified"));
         assert!(!headers.has_header("Foobar"));
-        assert_eq!(raw_headers, headers.to_string());
+        assert_eq!(Ok(raw_headers), headers.generate().as_deref());
     }
 
     #[test]
@@ -1119,14 +1109,14 @@ mod tests {
         );
         headers.set_header("X", "PogChamp");
         assert_eq!(
-            concat!(
+            Ok(concat!(
                 "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
                 "Host: www.example.com\r\n",
                 "Accept-Language: en, mi\r\n",
                 "X: PogChamp\r\n",
                 "\r\n",
-            ),
-            headers.to_string()
+            )),
+            headers.generate().as_deref()
         );
     }
 
@@ -1145,13 +1135,13 @@ mod tests {
         );
         headers.set_header("Host", "example.com");
         assert_eq!(
-            concat!(
+            Ok(concat!(
                 "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
                 "Host: example.com\r\n",
                 "Accept-Language: en, mi\r\n",
                 "\r\n",
-            ),
-            headers.to_string()
+            )),
+            headers.generate().as_deref()
         );
     }
 
