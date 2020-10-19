@@ -519,14 +519,14 @@ impl MessageHeaders {
 
     /// Borrow the list of headers.
     #[must_use]
-    pub fn get_all(&self) -> &Vec<Header> {
+    pub fn headers(&self) -> &Vec<Header> {
         &self.headers
     }
 
     /// Produce a list of the values for the headers with the given name.
     /// If no headers have the given name, an empty list is returned.
     #[must_use]
-    pub fn get_header_multi_value<T>(&self, name: T) -> Vec<String>
+    pub fn header_multi_value<T>(&self, name: T) -> Vec<String>
         where T: AsRef<str>
     {
         let name = name.as_ref();
@@ -545,10 +545,10 @@ impl MessageHeaders {
     /// comma-separated list of values, and produce that list.  If no headers
     /// have the given name, an empty list is returned.
     #[must_use]
-    pub fn get_header_tokens<T>(&self, name: T) -> Vec<String>
+    pub fn header_tokens<T>(&self, name: T) -> Vec<String>
         where T: AsRef<str>
     {
-        self.get_header_multi_value(name).iter()
+        self.header_multi_value(name).iter()
             .flat_map(|value| {
                 value.split_terminator(',')
                     .map(str::trim)
@@ -561,7 +561,7 @@ impl MessageHeaders {
     /// If there are two or more headers with the same name, the produced
     /// string will be the joining of their values with commas.
     #[must_use]
-    pub fn get_header_value<T>(&self, name: T) -> Option<String>
+    pub fn header_value<T>(&self, name: T) -> Option<String>
         where T: AsRef<str>
     {
         let name = name.as_ref();
@@ -583,7 +583,7 @@ impl MessageHeaders {
     }
 
     /// This is a convenience function which essentially looks up the tokens
-    /// in a header using [`get_header_tokens`](#method.get_header_tokens)
+    /// in a header using [`header_tokens`](#method.header_tokens)
     /// and searches them to see if the given token is among them.
     pub fn has_header_token<T>(
         &self,
@@ -594,7 +594,7 @@ impl MessageHeaders {
     {
         let token = token.as_ref();
         let normalized_token = token.to_ascii_lowercase();
-        self.get_header_tokens(name)
+        self.header_tokens(name)
             .iter()
             .any(|token_in_header| *token_in_header == normalized_token)
     }
@@ -882,7 +882,7 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        let header_collection = headers.get_all();
+        let header_collection = headers.headers();
         named_tuple!(
             struct ExpectedHeader {
                 name: &'static str,
@@ -926,7 +926,7 @@ mod tests {
             Ok(ParseStatus::Complete(raw_headers.len())),
             headers.parse(raw_message)
         );
-        let header_collection = headers.get_all();
+        let header_collection = headers.headers();
         named_tuple!(
             struct ExpectedHeader {
                 name: &'static str,
@@ -977,7 +977,7 @@ mod tests {
         );
         assert_eq!(
             Some(longest_possible_poggers),
-            headers.get_header_value(test_header_name)
+            headers.header_value(test_header_name)
         );
     }
 
@@ -1041,7 +1041,7 @@ mod tests {
         );
         assert_eq!(
             Some(long_poggers),
-            headers.get_header_value(test_header_name)
+            headers.header_value(test_header_name)
         );
     }
 
@@ -1080,7 +1080,7 @@ mod tests {
             Ok(ParseStatus::Complete(2)),
             headers.parse("\r\n Something Else Not Part Of The Message")
         );
-        assert!(headers.get_all().is_empty());
+        assert!(headers.headers().is_empty());
     }
 
     #[test]
@@ -1100,7 +1100,7 @@ mod tests {
         );
         assert_eq!(
             Some("www.example.com"),
-            headers.get_header_value("Host").as_deref()
+            headers.header_value("Host").as_deref()
         );
     }
 
@@ -1170,7 +1170,7 @@ mod tests {
         );
         assert_eq!(
             None,
-            headers.get_header_value("PePe")
+            headers.header_value("PePe")
         );
     }
 
@@ -1261,7 +1261,7 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        let header_collection = headers.get_all();
+        let header_collection = headers.headers();
         named_tuple!(
             struct ExpectedHeader {
                 name: &'static str,
@@ -1300,7 +1300,7 @@ mod tests {
         );
         assert_eq!(
             Some("This is a test"),
-            headers.get_header_value("Subject").as_deref()
+            headers.header_value("Subject").as_deref()
         );
     }
 
@@ -1321,7 +1321,7 @@ mod tests {
         );
         assert_eq!(
             Some("This is a test"),
-            headers.get_header_value("Subject").as_deref()
+            headers.header_value("Subject").as_deref()
         );
     }
 
@@ -1405,7 +1405,7 @@ mod tests {
                 "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
                 "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1",
             )),
-            headers.get_header_value("Via").as_deref()
+            headers.header_value("Via").as_deref()
         );
         assert_eq!(
             &[
@@ -1413,20 +1413,20 @@ mod tests {
                 "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2",
                 "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1",
             ][..],
-            headers.get_header_multi_value("Via")
+            headers.header_multi_value("Via")
         );
         assert_eq!(
             Some("Bob <sip:bob@biloxi.com>;tag=a6c85cf"),
-            headers.get_header_value("To").as_deref()
+            headers.header_value("To").as_deref()
         );
         assert_eq!(
             &[
                 "Bob <sip:bob@biloxi.com>;tag=a6c85cf"
             ][..],
-            headers.get_header_multi_value("To")
+            headers.header_multi_value("To")
         );
         assert!(
-            headers.get_header_multi_value("PogChamp").is_empty()
+            headers.header_multi_value("PogChamp").is_empty()
         );
     }
 
@@ -1616,7 +1616,7 @@ mod tests {
     }
 
     #[test]
-    fn get_header_tokens() {
+    fn header_tokens() {
         let raw_message = concat!(
             "Foo: bar, Spam,  heLLo\r\n",
             "Bar: Foo \r\n",
@@ -1634,17 +1634,17 @@ mod tests {
                 "spam",
                 "hello",
             ][..],
-            headers.get_header_tokens("Foo")
+            headers.header_tokens("Foo")
         );
         assert_eq!(
             &[
                 "foo",
             ][..],
-            headers.get_header_tokens("Bar")
+            headers.header_tokens("Bar")
         );
         assert_eq!(
             &[] as &[String],
-            headers.get_header_tokens("Spam")
+            headers.header_tokens("Spam")
         );
     }
 
@@ -1680,10 +1680,10 @@ mod tests {
         original_headers.set_header("Hello", "World");
         let mut headers_copy = original_headers.clone();
         headers_copy.set_header("Hello", "PePe");
-        assert_eq!(Some("Bar"), original_headers.get_header_value("Foo").as_deref());
-        assert_eq!(Some("World"), original_headers.get_header_value("Hello").as_deref());
-        assert_eq!(Some("Bar"), headers_copy.get_header_value("Foo").as_deref());
-        assert_eq!(Some("PePe"), headers_copy.get_header_value("Hello").as_deref());
+        assert_eq!(Some("Bar"), original_headers.header_value("Foo").as_deref());
+        assert_eq!(Some("World"), original_headers.header_value("Hello").as_deref());
+        assert_eq!(Some("Bar"), headers_copy.header_value("Foo").as_deref());
+        assert_eq!(Some("PePe"), headers_copy.header_value("Hello").as_deref());
     }
 
     #[test]
@@ -1714,7 +1714,7 @@ mod tests {
                 + raw_message_pieces[3]
             )
         );
-        let header_collection = headers.get_all();
+        let header_collection = headers.headers();
         named_tuple!(
             struct ExpectedHeader {
                 name: &'static str,
