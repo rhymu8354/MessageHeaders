@@ -428,7 +428,6 @@ pub enum HeaderMultiMode {
 pub struct MessageHeaders {
     headers: Vec<Header>,
     line_length_limit: Option<usize>,
-    valid: bool,
 }
 
 impl MessageHeaders {
@@ -617,23 +616,12 @@ impl MessageHeaders {
         })
     }
 
-    /// Determine whether or not the previous input fed to the
-    /// [`parse`](#method.parse) function was valid.
-    ///
-    /// TODO: Consider removing this, since `parse` now returns a `Result`
-    /// that always indicates an error when invalid input is detected.
-    #[must_use]
-    pub fn is_valid(&self) -> bool {
-        self.valid
-    }
-
     /// Create a new instance with no headers in it.
     #[must_use]
     pub fn new() -> Self {
         Self{
             headers: Vec::new(),
             line_length_limit: None,
-            valid: true,
         }
     }
 
@@ -669,7 +657,6 @@ impl MessageHeaders {
                 if let Some(line_length_limit) = self.line_length_limit {
                     let unterminated_line_length = raw_message.len() - offset;
                     if unterminated_line_length + 2 > line_length_limit {
-                        self.valid = false;
                         let end = std::cmp::min(
                             unterminated_line_length,
                             line_length_limit
@@ -686,7 +673,6 @@ impl MessageHeaders {
             let line_terminator = line_terminator.unwrap();
             if let Some(line_length_limit) = self.line_length_limit {
                 if line_terminator + CRLF.len() > line_length_limit {
-                    self.valid = false;
                     return Err(Error::HeaderLineTooLong(
                         raw_message[offset..offset+line_length_limit].to_string()
                     ));
@@ -702,34 +688,27 @@ impl MessageHeaders {
             }
 
             // Separate the header name from the header value.
-            match separate_header_name_and_value(
+            let header = separate_header_name_and_value(
                 &raw_message[offset..offset+line_terminator]
-            ) {
-                Ok(header) => {
-                    // Check the first value segment for validity.
-                    validate_header_value(&header, &header.value)?;
+            )?;
+            // Check the first value segment for validity.
+            validate_header_value(&header, &header.value)?;
 
-                    // Look ahead in the raw message and perform line unfolding
-                    // if we see any lines that begin with whitespace.
-                    let next_offset = offset + line_terminator + CRLF.len();
-                    if let Some((mut header, consumed)) = unfold_header(
-                        &raw_message[next_offset..],
-                        header
-                    )? {
-                        // Remove any whitespace that might be at the beginning
-                        // or end of the header value, and then store the
-                        // header.
-                        header.value = header.value.trim().to_string();
-                        self.headers.push(header);
-                        offset = next_offset + consumed;
-                    } else {
-                        return Ok(ParseStatus::Incomplete(offset));
-                    }
-                },
-                Err(error) => {
-                    self.valid = false;
-                    return Err(error);
-                }
+            // Look ahead in the raw message and perform line unfolding
+            // if we see any lines that begin with whitespace.
+            let next_offset = offset + line_terminator + CRLF.len();
+            if let Some((mut header, consumed)) = unfold_header(
+                &raw_message[next_offset..],
+                header
+            )? {
+                // Remove any whitespace that might be at the beginning
+                // or end of the header value, and then store the
+                // header.
+                header.value = header.value.trim().to_string();
+                self.headers.push(header);
+                offset = next_offset + consumed;
+            } else {
+                return Ok(ParseStatus::Incomplete(offset));
             }
         }
         Ok(ParseStatus::Incomplete(offset))
@@ -909,7 +888,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         let header_collection = headers.get_all();
         named_tuple!(
             struct ExpectedHeader {
@@ -954,7 +932,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_headers.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         let header_collection = headers.get_all();
         named_tuple!(
             struct ExpectedHeader {
@@ -1004,7 +981,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             Some(longest_possible_poggers),
             headers.get_header_value(test_header_name)
@@ -1110,7 +1086,6 @@ mod tests {
             Ok(ParseStatus::Complete(2)),
             headers.parse("\r\n Something Else Not Part Of The Message")
         );
-        assert!(headers.is_valid());
         assert!(headers.get_all().is_empty());
     }
 
@@ -1129,7 +1104,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message_headers.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             Some("www.example.com"),
             headers.get_header_value("Host").as_deref()
@@ -1149,7 +1123,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         headers.set_header("X", "PogChamp");
         assert_eq!(
             concat!(
@@ -1176,7 +1149,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         headers.set_header("Host", "example.com");
         assert_eq!(
             concat!(
@@ -1202,7 +1174,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             None,
             headers.get_header_value("PePe")
@@ -1225,7 +1196,6 @@ mod tests {
             )),
             headers.parse(raw_message)
         );
-        assert!(!headers.is_valid());
     }
 
     #[test]
@@ -1297,7 +1267,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         let header_collection = headers.get_all();
         named_tuple!(
             struct ExpectedHeader {
@@ -1335,7 +1304,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             Some("This is a test"),
             headers.get_header_value("Subject").as_deref()
@@ -1357,7 +1325,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             Some("This is a test"),
             headers.get_header_value("Subject").as_deref()
@@ -1438,7 +1405,6 @@ mod tests {
             Ok(ParseStatus::Complete(raw_message.len())),
             headers.parse(raw_message)
         );
-        assert!(headers.is_valid());
         assert_eq!(
             Some(concat!(
                 "SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
@@ -1754,7 +1720,6 @@ mod tests {
                 + raw_message_pieces[3]
             )
         );
-        assert!(headers.is_valid());
         let header_collection = headers.get_all();
         named_tuple!(
             struct ExpectedHeader {
