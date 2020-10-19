@@ -160,11 +160,11 @@ fn unfold_header(
 
 fn validate_header_name(text: &str) -> Result<(), Error> {
     if text.chars()
-        .any(|c| !c.is_ascii_graphic())
+        .all(|c| c.is_ascii_graphic())
     {
-        Err(Error::HeaderNameContainsIllegalCharacter(text.to_string()))
-    } else {
         Ok(())
+    } else {
+        Err(Error::HeaderNameContainsIllegalCharacter(text.to_string()))
     }
 }
 
