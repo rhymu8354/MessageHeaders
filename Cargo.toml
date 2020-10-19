@@ -1,12 +1,12 @@
 [package]
 name = "rhymessage"
-version = "1.0.0"
+version = "1.0.1"
 description = "Implementation of IETF RFC 5322, Internet Message Format"
 authors = ["Richard Walters <rwalters@digitalstirling.com>"]
 edition = "2018"
 license-file = "LICENSE.txt"
 readme = "README.md"
-categories = ["parser-implementation", "web-programming"]
+categories = ["parser-implementations", "web-programming"]
 keywords = ["parser", "rfc5322"]
 repository = "https://github.com/rhymu8354/MessageHeaders.git"
 exclude = [
