@@ -1,23 +1,42 @@
-# InternetMessage
+# MessageHeaders (rhymessage)
 
-This is a library which implements [RFC 5322](https://tools.ietf.org/html/rfc5322),
-"Internet Message Format".
+This is a library which implements [RFC
+5322](https://tools.ietf.org/html/rfc5322), "Internet Message Format".
 
-## Usage
+[![Crates.io](https://img.shields.io/crates/v/rhymessage.svg)](https://crates.io/crates/rhymessage)
+[![Documentation](https://docs.rs/rhymessage/badge.svg)][dox]
 
-The `InternetMessage::InternetMessage` class is used to parse e-mail or web server/client messages from strings, render them as strings, and get or set the individual headers or the body.
+More information about the Rust implementation of this library can be found in
+the [crate documentation][dox].
 
-## Supported platforms / recommended toolchains
+[dox]: https://docs.rs/rhymessage
 
-This is a portable C++11 library which depends only on the C++11 compiler and standard library, so it should be supported on almost any platform.  The following are recommended toolchains for popular platforms.
+The purpose of this library is to provide a `MessageHeaders` type which can be
+used to parse the header portion of e-mail or web server/client messages from
+strings, render them as strings, and get or set the individual headers.
 
-* Windows -- [Visual Studio](https://www.visualstudio.com/) (Microsoft Visual C++)
+This is a multi-language library containing independent implementations
+for the following programming languages:
+
+* C++
+* Rust
+
+## Building the C++ Implementation
+
+A portable library is built which depends only on the C++11 compiler and
+standard library, so it should be supported on almost any platform.  The
+following are recommended toolchains for popular platforms.
+
+* Windows -- [Visual Studio](https://www.visualstudio.com/) (Microsoft Visual
+  C++)
 * Linux -- clang or gcc
 * MacOS -- Xcode (clang)
 
 ## Building
 
-This library is not intended to stand alone.  It is intended to be included in a larger solution which uses [CMake](https://cmake.org/) to generate the build system and build applications which will link with the library.
+This library is not intended to stand alone.  It is intended to be included in
+a larger solution which uses [CMake](https://cmake.org/) to generate the build
+system and build applications which will link with the library.
 
 There are two distinct steps in the build process:
 
@@ -27,11 +46,13 @@ There are two distinct steps in the build process:
 ### Prerequisites
 
 * [CMake](https://cmake.org/) version 3.8 or newer
-* C++11 toolchain compatible with CMake for your development platform (e.g. [Visual Studio](https://www.visualstudio.com/) on Windows)
+* C++11 toolchain compatible with CMake for your development platform (e.g.
+  [Visual Studio](https://www.visualstudio.com/) on Windows)
 
 ### Build system generation
 
-Generate the build system using [CMake](https://cmake.org/) from the solution root.  For example:
+Generate the build system using [CMake](https://cmake.org/) from the solution
+root.  For example:
 
 ```bash
 mkdir build
@@ -48,3 +69,7 @@ For [CMake](https://cmake.org/):
 cd build
 cmake --build . --config Release
 ```
+
+## License
+
+Licensed under the [MIT license](LICENSE.txt).
