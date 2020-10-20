@@ -58,17 +58,23 @@ const WSP: &str = " \t";
 // This is the required line terminator for internet message header lines.
 const CRLF: &str = "\r\n";
 
-fn separate_header_name_and_value(line: &str) -> Result<Header, Error> {
-    match line.find(':') {
-        None => Err(Error::HeaderLineMissingColon(line.to_string())),
-        Some(name_value_delimiter) => {
-            let name = &line[0..name_value_delimiter];
-            validate_header_name(name)?;
-            Ok(Header{
-                name: name.into(),
-                value: line[name_value_delimiter+1..].to_string()
-            })
-        },
+fn find_whitespace<T>(message: T) -> Option<usize>
+    where T: AsRef<[u8]>
+{
+    let message = message.as_ref();
+    match message.len() {
+        0 | 1 => None,
+        len => {
+            for i in 0..len-1 {
+                if
+                    message[i] == b'\r'
+                    && message[i+1] == b'\n'
+                {
+                    return Some(i)
+                }
+            }
+            None
+        }
     }
 }
 
@@ -115,26 +121,45 @@ fn fold_header(
     }
 }
 
+fn separate_header_name_and_value(line: &str) -> Result<Header, Error> {
+    match line.find(':') {
+        None => Err(Error::HeaderLineMissingColon(line.to_string())),
+        Some(name_value_delimiter) => {
+            let name = &line[0..name_value_delimiter];
+            validate_header_name(name)?;
+            Ok(Header{
+                name: name.into(),
+                value: line[name_value_delimiter+1..].to_string()
+            })
+        },
+    }
+}
+
 fn unfold_header(
-    mut raw_message: &str,
+    mut raw_message: &[u8],
     mut header: Header,
 ) -> Result<Option<(Header, usize)>, Error> {
     let mut consumed = 0;
     loop {
         // Find where the next line ends.
-        let line_terminator = match raw_message.find(CRLF) {
+        let line_terminator = match find_whitespace(raw_message) {
             None => return Ok(None),
             Some(i) => i
         };
 
-        // Calculate the next line's length.
-        let line_length = line_terminator + CRLF.len();
+        // Calculate the next line's length, and convert it into a string.
+        let line_length = line_terminator + 2;
+        let line = std::str::from_utf8(&raw_message[..line_terminator])
+            .map_err(|error| Error::HeaderLineInvalidText{
+                line: raw_message[..line_terminator].to_vec(),
+                source: error,
+            })?;
 
         // If the next line begins with whitespace, unfold the line
         if
             line_terminator > 0  // line is not empty
             && WSP.find(         // and we can find whitespace
-                raw_message      // in the message
+                line             // in the message
                     .chars()
                     .next()      // beginning at the line start
                     .unwrap()
@@ -144,9 +169,8 @@ fn unfold_header(
             header.value.push(' ');
 
             // Concatenate the next line to the header value after trimming it.
-            let next_segment = &raw_message[..line_terminator];
-            validate_header_value(&header, next_segment)?;
-            header.value += next_segment.trim();
+            validate_header_value(&header, line)?;
+            header.value += line.trim();
 
             // Move to the line following the next line.
             raw_message = &raw_message[line_length..];
@@ -261,88 +285,31 @@ pub struct Header {
     pub value: String,
 }
 
-#[derive(Debug, Eq, PartialEq)]
 /// This enumerates the possible non-error states `MessageHeaders` can be in
 /// after parsing a bit of input.
-///
-/// # Examples
-///
-/// ```rust
-/// # extern crate rhymessage;
-/// use rhymessage::{MessageHeaders, ParseStatus};
-///
-/// # fn main() -> Result<(), rhymessage::Error> {
-/// let mut headers = MessageHeaders::new();
-///
-/// // `parse` does not consume first line because the next line
-/// // it hasn't seen yet might contain part of the "From" header.
-/// assert_eq!(
-///     ParseStatus::Incomplete(0),
-///     headers.parse("From: joe@example.com\r\n")?
-/// );
-///
-/// // So we re-send the "From" line along with the content that follows.
-/// // At this point, `parse` knows it has the full "From" header, and
-/// // consumes it, but not the "To" header, since the next line might
-/// // be a continuation of it.
-/// assert_eq!(
-///     ParseStatus::Incomplete(23),
-///     headers.parse(concat!(
-///         "From: joe@example.com\r\n",
-///         "To: sal@example.com\r\n",
-///     ))?
-/// );
-///
-/// // So we re-send the "To" line along with the content that follows.
-/// // At this point, `parse` knows it has the full "To" header, and
-/// // consumes it, but not the "Subject" header, since the next line might
-/// // be a continuation of it.
-/// assert_eq!(
-///     ParseStatus::Incomplete(21),
-///     headers.parse(concat!(
-///         "To: sal@example.com\r\n",
-///         "Subject: Hello,\r\n",
-///     ))?
-/// );
-///
-/// // So we re-send the "Subject" line along with the content that
-/// // follows.  At this point, `parse` still doesn't know it has the
-/// // full "Subject" header, so nothing is consumed.
-/// assert_eq!(
-///     ParseStatus::Incomplete(0),
-///     headers.parse(concat!(
-///         "Subject: Hello,\r\n",
-///         " World!\r\n",
-///     ))?
-/// );
-///
-/// // So we re-send again with even more content.  At this point,
-/// // `parse` sees the empty line separating headers from body,
-/// // so it can finally consume the "Subject" header as well as
-/// // indicate that parsing the headers is complete.
-/// assert_eq!(
-///     ParseStatus::Complete(28),
-///     headers.parse(concat!(
-///         "Subject: Hello,\r\n",
-///         " World!\r\n",
-///         "\r\n",
-///     ))?
-/// );
-/// # Ok(())
-/// # }
-/// ```
+#[derive(Debug, Eq, PartialEq)]
 pub enum ParseStatus {
-    /// The body was found at the attached byte offset in the last input
-    /// string.
-    Complete(usize),
+    /// The message headers were fully parsed and the body (if any) begins
+    /// after the last byte consumed.
+    Complete,
 
-    /// The body was not found, but all characters up to but not including the
-    /// attached byte offset were parsed.
+    /// The message headers have not yet been fully parsed.
     ///
     /// The user is expected to call `parse` again with more input, starting
     /// with the unparsed portion of the previous input string, and adding more
     /// to it.
-    Incomplete(usize),
+    Incomplete,
+}
+
+/// This holds the values returned by `MessageHeaders::parse`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ParseResults {
+    /// This indicates the state of the parser.
+    pub status: ParseStatus,
+
+    /// This is the number of bytes of input consumed by the last
+    /// `MessageHeaders::parse` call.
+    pub consumed: usize,
 }
 
 /// This enumerates the ways in which a multi-value header may be represented
@@ -372,7 +339,7 @@ pub enum HeaderMultiMode {
     ///             "SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2,",
     ///             "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
     ///         "\r\n",
-    ///     )),
+    ///     ).as_bytes()),
     ///     headers.generate().as_deref()
     /// );
     /// # Ok(())
@@ -405,7 +372,7 @@ pub enum HeaderMultiMode {
     ///         "Via: SIP/2.0/UDP bigbox3.site3.atlanta.com ;branch=z9hG4bK77ef4c2312983.1;received=192.0.2.2\r\n",
     ///         "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
     ///         "\r\n",
-    ///     ),
+    ///     ).as_bytes(),
     ///     headers.generate()?
     /// );
     /// # Ok(())
@@ -491,7 +458,7 @@ impl MessageHeaders {
     /// `Error::StringFormat` if one of the internal string formatting
     /// functions should fail (which they shouldn't unless something
     /// used internally doesn't implement `Display` properly.
-    pub fn generate(&self) -> Result<String, Error> {
+    pub fn generate(&self) -> Result<Vec<u8>, Error> {
         let mut raw_string = String::new();
         for header in &self.headers {
             let line_buffer = format!("{}: {}", header.name.0, header.value);
@@ -513,7 +480,7 @@ impl MessageHeaders {
             }
         }
         write!(&mut raw_string, "{}", CRLF)?;
-        Ok(raw_string)
+        Ok(raw_string.into_bytes())
     }
 
     /// Borrow the list of headers.
@@ -622,8 +589,9 @@ impl MessageHeaders {
     /// collection of headers internally, and detecting when the end of
     /// the headers and the beginning of the body is found.
     ///
-    /// See [`ParseStatus`](enum.ParseStatus.html) for details on what
-    /// this function returns to indicate the result of the parsing.
+    /// This function may be called multiple times to parse input
+    /// incrementally.  Each call returns an indication of whether or
+    /// not a message was parsed and how many input bytes were consumed.
     ///
     /// # Errors
     ///
@@ -635,17 +603,98 @@ impl MessageHeaders {
     ///   header contains an illegal character
     /// * `HeaderValueContainsIllegalCharacter` &ndash; the value of a
     ///   header contains an illegal character
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate rhymessage;
+    /// use rhymessage::{MessageHeaders, ParseResults, ParseStatus};
+    ///
+    /// # fn main() -> Result<(), rhymessage::Error> {
+    /// let mut headers = MessageHeaders::new();
+    ///
+    /// // `parse` does not consume first line because the next line
+    /// // it hasn't seen yet might contain part of the "From" header.
+    /// assert_eq!(
+    ///     ParseResults{
+    ///         status: ParseStatus::Incomplete,
+    ///         consumed: 0,
+    ///     },
+    ///     headers.parse("From: joe@example.com\r\n")?
+    /// );
+    ///
+    /// // So we re-send the "From" line along with the content that follows.
+    /// // At this point, `parse` knows it has the full "From" header, and
+    /// // consumes it, but not the "To" header, since the next line might
+    /// // be a continuation of it.
+    /// assert_eq!(
+    ///     ParseResults{
+    ///         status: ParseStatus::Incomplete,
+    ///         consumed: 23,
+    ///     },
+    ///     headers.parse(concat!(
+    ///         "From: joe@example.com\r\n",
+    ///         "To: sal@example.com\r\n",
+    ///     ))?
+    /// );
+    ///
+    /// // So we re-send the "To" line along with the content that follows.
+    /// // At this point, `parse` knows it has the full "To" header, and
+    /// // consumes it, but not the "Subject" header, since the next line might
+    /// // be a continuation of it.
+    /// assert_eq!(
+    ///     ParseResults{
+    ///         status: ParseStatus::Incomplete,
+    ///         consumed: 21,
+    ///     },
+    ///     headers.parse(concat!(
+    ///         "To: sal@example.com\r\n",
+    ///         "Subject: Hello,\r\n",
+    ///     ))?
+    /// );
+    ///
+    /// // So we re-send the "Subject" line along with the content that
+    /// // follows.  At this point, `parse` still doesn't know it has the
+    /// // full "Subject" header, so nothing is consumed.
+    /// assert_eq!(
+    ///     ParseResults{
+    ///         status: ParseStatus::Incomplete,
+    ///         consumed: 0,
+    ///     },
+    ///     headers.parse(concat!(
+    ///         "Subject: Hello,\r\n",
+    ///         " World!\r\n",
+    ///     ))?
+    /// );
+    ///
+    /// // So we re-send again with even more content.  At this point,
+    /// // `parse` sees the empty line separating headers from body,
+    /// // so it can finally consume the "Subject" header as well as
+    /// // indicate that parsing the headers is complete.
+    /// assert_eq!(
+    ///     ParseResults{
+    ///         status: ParseStatus::Complete,
+    ///         consumed: 28,
+    ///     },
+    ///     headers.parse(concat!(
+    ///         "Subject: Hello,\r\n",
+    ///         " World!\r\n",
+    ///         "\r\n",
+    ///     ))?
+    /// );
+    /// # Ok(())
+    /// # }
     pub fn parse<T>(
         &mut self,
         raw_message: T
-    ) -> Result<ParseStatus, Error>
-        where T: AsRef<str>
+    ) -> Result<ParseResults, Error>
+        where T: AsRef<[u8]>
     {
         let mut offset = 0;
         let raw_message = raw_message.as_ref();
         while offset < raw_message.len() {
             // Find the end of the current line.
-            let line_terminator = &raw_message[offset..].find(CRLF);
+            let line_terminator = find_whitespace(&raw_message[offset..]);
             if line_terminator.is_none() {
                 if let Some(line_length_limit) = self.line_length_limit {
                     let unterminated_line_length = raw_message.len() - offset;
@@ -655,7 +704,7 @@ impl MessageHeaders {
                             line_length_limit
                         );
                         return Err(Error::HeaderLineTooLong(
-                            raw_message[offset..offset+end].to_string()
+                            raw_message[offset..offset+end].to_vec()
                         ));
                     }
                 }
@@ -667,7 +716,7 @@ impl MessageHeaders {
             if let Some(line_length_limit) = self.line_length_limit {
                 if line_terminator + CRLF.len() > line_length_limit {
                     return Err(Error::HeaderLineTooLong(
-                        raw_message[offset..offset+line_length_limit].to_string()
+                        raw_message[offset..offset+line_length_limit].to_vec()
                     ));
                 }
             }
@@ -677,12 +726,19 @@ impl MessageHeaders {
             // but leave up to the user to handle) begins.
             if line_terminator == 0 {
                 offset += CRLF.len();
-                return Ok(ParseStatus::Complete(offset));
+                return Ok(ParseResults{
+                    status: ParseStatus::Complete,
+                    consumed: offset,
+                });
             }
 
             // Separate the header name from the header value.
             let header = separate_header_name_and_value(
-                &raw_message[offset..offset+line_terminator]
+                std::str::from_utf8(&raw_message[offset..offset+line_terminator])
+                    .map_err(|error| Error::HeaderLineInvalidText{
+                        line: raw_message[offset..offset+line_terminator].to_vec(),
+                        source: error
+                    })?
             )?;
             // Check the first value segment for validity.
             validate_header_value(&header, &header.value)?;
@@ -701,10 +757,16 @@ impl MessageHeaders {
                 self.headers.push(header);
                 offset = next_offset + consumed;
             } else {
-                return Ok(ParseStatus::Incomplete(offset));
+                return Ok(ParseResults{
+                    status: ParseStatus::Incomplete,
+                    consumed: offset,
+                });
             }
         }
-        Ok(ParseStatus::Incomplete(offset))
+        Ok(ParseResults{
+            status: ParseStatus::Incomplete,
+            consumed: offset,
+        })
     }
 
     /// Remove all headers with the given name.
@@ -868,7 +930,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         let header_collection = headers.headers();
@@ -892,7 +957,10 @@ mod tests {
             });
         assert!(headers.has_header("Host"));
         assert!(!headers.has_header("Foobar"));
-        assert_eq!(Ok(raw_message), headers.generate().as_deref());
+        assert_eq!(
+            Ok(raw_message.as_bytes()),
+            headers.generate().as_deref()
+        );
     }
 
     #[test]
@@ -912,7 +980,10 @@ mod tests {
         let raw_message = String::from(raw_headers)
             + "Hello World! My payload includes a trailing CRLF.\r\n";
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_headers.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_headers.len(),
+            }),
             headers.parse(raw_message)
         );
         let header_collection = headers.headers();
@@ -941,7 +1012,10 @@ mod tests {
             });
         assert!(headers.has_header("Last-Modified"));
         assert!(!headers.has_header("Foobar"));
-        assert_eq!(Ok(raw_headers), headers.generate().as_deref());
+        assert_eq!(
+            Ok(raw_headers.as_bytes()),
+            headers.generate().as_deref()
+        );
     }
 
     #[test]
@@ -961,7 +1035,10 @@ mod tests {
             + "Accept-Language: en, mi\r\n"
             + "\r\n";
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -988,7 +1065,7 @@ mod tests {
             + "Accept-Language: en, mi\r\n"
             + "\r\n";
         assert_eq!(
-            Err(Error::HeaderLineTooLong(too_long_header[0..1000].to_string())),
+            Err(Error::HeaderLineTooLong(too_long_header[0..1000].as_bytes().to_vec())),
             headers.parse(raw_message)
         );
     }
@@ -1004,7 +1081,7 @@ mod tests {
         );
         let raw_message = test_header_name_with_delimiters + &value_is_too_long;
         assert_eq!(
-            Err(Error::HeaderLineTooLong(raw_message.clone())),
+            Err(Error::HeaderLineTooLong(raw_message.clone().into_bytes())),
             headers.parse(raw_message)
         );
     }
@@ -1025,7 +1102,10 @@ mod tests {
             + "Accept-Language: en, mi\r\n"
             + "\r\n";
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1038,7 +1118,10 @@ mod tests {
     fn empty_message() {
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Incomplete(0)),
+            Ok(ParseResults{
+                status: ParseStatus::Incomplete,
+                consumed: 0,
+            }),
             headers.parse("")
         );
     }
@@ -1047,7 +1130,10 @@ mod tests {
     fn single_line_truncated() {
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Incomplete(0)),
+            Ok(ParseResults{
+                status: ParseStatus::Incomplete,
+                consumed: 0,
+            }),
             headers.parse("User-Agent: curl")
         );
     }
@@ -1057,7 +1143,10 @@ mod tests {
         let mut headers = MessageHeaders::new();
         let input = "User-Agent: curl\r\n\r\n";
         assert_eq!(
-            Ok(ParseStatus::Complete(input.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: input.len(),
+            }),
             headers.parse(input)
         );
     }
@@ -1066,7 +1155,10 @@ mod tests {
     fn no_headers_at_all() {
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Complete(2)),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: 2,
+            }),
             headers.parse("\r\n Something Else Not Part Of The Message")
         );
         assert!(headers.headers().is_empty());
@@ -1084,7 +1176,10 @@ mod tests {
         let raw_message = String::from(raw_message_headers)
             + " Something Else Not Part Of The Message";
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message_headers.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message_headers.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1103,7 +1198,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         headers.set_header("X", "PogChamp");
@@ -1114,7 +1212,7 @@ mod tests {
                 "Accept-Language: en, mi\r\n",
                 "X: PogChamp\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1129,7 +1227,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         headers.set_header("Host", "example.com");
@@ -1139,7 +1240,7 @@ mod tests {
                 "Host: example.com\r\n",
                 "Accept-Language: en, mi\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1154,7 +1255,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1247,7 +1351,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         let header_collection = headers.headers();
@@ -1284,7 +1391,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1305,7 +1415,10 @@ mod tests {
             "\r\n",
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1342,6 +1455,7 @@ mod tests {
             if let Some(expected_lines) = test_vector.expected_lines() {
                 assert!(raw_headers.is_ok());
                 let raw_headers = raw_headers.unwrap();
+                let raw_headers = std::str::from_utf8(&raw_headers).unwrap();
                 let actual_lines = raw_headers.split("\r\n").collect::<Vec<&str>>();
                 assert_eq!(*expected_lines, actual_lines);
             } else {
@@ -1385,7 +1499,10 @@ mod tests {
         );
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1440,7 +1557,7 @@ mod tests {
                     "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         headers = MessageHeaders::new();
@@ -1454,7 +1571,7 @@ mod tests {
                 "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1480,7 +1597,7 @@ mod tests {
                 "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
                 "Via: Trickster\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         headers.set_header("Via", "Kappa");
@@ -1490,7 +1607,7 @@ mod tests {
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1512,7 +1629,7 @@ mod tests {
                     "SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         headers.add_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
@@ -1524,7 +1641,7 @@ mod tests {
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         let x_pepe: Vec<String> = [
@@ -1541,7 +1658,7 @@ mod tests {
                 "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
                 "X-PePe: <3,SeemsGood\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         let to: Vec<String> = ["Carol"].iter().map(|s| String::from(*s)).collect();
@@ -1556,7 +1673,7 @@ mod tests {
                 "X-PePe: <3,SeemsGood\r\n",
                 "To: Carol\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1580,7 +1697,7 @@ mod tests {
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         headers.remove_header("From");
@@ -1591,7 +1708,7 @@ mod tests {
                 "Via: SIP/2.0/UDP pc33.atlanta.com ;branch=z9hG4bK776asdhds ;received=192.0.2.1\r\n",
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
         headers.remove_header("Via");
@@ -1599,7 +1716,7 @@ mod tests {
             Ok(concat!(
                 "To: Bob <sip:bob@biloxi.com>;tag=a6c85cf\r\n",
                 "\r\n",
-            )),
+            ).as_bytes()),
             headers.generate().as_deref()
         );
     }
@@ -1614,7 +1731,10 @@ mod tests {
         );
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert_eq!(
@@ -1647,7 +1767,10 @@ mod tests {
         );
         let mut headers = MessageHeaders::new();
         assert_eq!(
-            Ok(ParseStatus::Complete(raw_message.len())),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: raw_message.len(),
+            }),
             headers.parse(raw_message)
         );
         assert!(headers.has_header_token("Foo", "bar"));
@@ -1685,18 +1808,24 @@ mod tests {
             "\r\n"
         ][..];
         assert_eq!(
-            Ok(ParseStatus::Incomplete(raw_message_pieces[0].len())),
+            Ok(ParseResults{
+                status: ParseStatus::Incomplete,
+                consumed: raw_message_pieces[0].len(),
+            }),
             headers.parse(
                 String::from(raw_message_pieces[0])
                 + raw_message_pieces[1]
             )
         );
         assert_eq!(
-            Ok(ParseStatus::Complete(
-                raw_message_pieces[1].len()
-                + raw_message_pieces[2].len()
-                + raw_message_pieces[3].len()
-            )),
+            Ok(ParseResults{
+                status: ParseStatus::Complete,
+                consumed: (
+                    raw_message_pieces[1].len()
+                    + raw_message_pieces[2].len()
+                    + raw_message_pieces[3].len()
+                ),
+            }),
             headers.parse(
                 String::from(raw_message_pieces[1])
                 + raw_message_pieces[2]
@@ -1725,7 +1854,12 @@ mod tests {
         assert!(headers.has_header("Host"));
         assert!(!headers.has_header("Foobar"));
         assert_eq!(
-            Ok(raw_message_pieces.iter().copied().collect::<String>()),
+            Ok(
+                raw_message_pieces.iter()
+                    .flat_map(|s| s.as_bytes())
+                    .copied()
+                    .collect()
+            ),
             headers.generate()
         );
     }
