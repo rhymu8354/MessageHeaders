@@ -58,7 +58,7 @@ const WSP: &str = " \t";
 // This is the required line terminator for internet message header lines.
 const CRLF: &str = "\r\n";
 
-fn find_whitespace<T>(message: T) -> Option<usize>
+fn find_crlf<T>(message: T) -> Option<usize>
     where T: AsRef<[u8]>
 {
     let message = message.as_ref();
@@ -142,7 +142,7 @@ fn unfold_header(
     let mut consumed = 0;
     loop {
         // Find where the next line ends.
-        let line_terminator = match find_whitespace(raw_message) {
+        let line_terminator = match find_crlf(raw_message) {
             None => return Ok(None),
             Some(i) => i
         };
@@ -694,7 +694,7 @@ impl MessageHeaders {
         let raw_message = raw_message.as_ref();
         while offset < raw_message.len() {
             // Find the end of the current line.
-            let line_terminator = find_whitespace(&raw_message[offset..]);
+            let line_terminator = find_crlf(&raw_message[offset..]);
             if line_terminator.is_none() {
                 if let Some(line_length_limit) = self.line_length_limit {
                     let unterminated_line_length = raw_message.len() - offset;
