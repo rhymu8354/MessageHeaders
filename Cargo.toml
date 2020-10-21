@@ -1,6 +1,6 @@
 [package]
 name = "rhymessage"
-version = "1.1.0"
+version = "1.2.0"
 description = "Implementation of IETF RFC 5322, Internet Message Format"
 authors = ["Richard Walters <rwalters@digitalstirling.com>"]
 edition = "2018"

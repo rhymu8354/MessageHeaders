@@ -61,21 +61,9 @@ const CRLF: &str = "\r\n";
 fn find_crlf<T>(message: T) -> Option<usize>
     where T: AsRef<[u8]>
 {
-    let message = message.as_ref();
-    match message.len() {
-        0 | 1 => None,
-        len => {
-            for i in 0..len-1 {
-                if
-                    message[i] == b'\r'
-                    && message[i+1] == b'\n'
-                {
-                    return Some(i)
-                }
-            }
-            None
-        }
-    }
+    message.as_ref().windows(2)
+        .enumerate()
+        .find_map(|(i, window)| if window == b"\r\n" { Some(i) } else { None })
 }
 
 fn fold_header(
@@ -391,16 +379,14 @@ pub struct MessageHeaders {
 }
 
 impl MessageHeaders {
-    /// Append a header with the given name and value.  This does not change or
-    /// remove any previously added headers, even if they have the same name.
-    /// To replace a previously added header, use
-    /// [`set_header`](#method.set_header) instead.
-    pub fn add_header<N, V>(&mut self, name: N, value: V)
-        where N: Into<HeaderName>, V: Into<String>
+    /// Append the given header.  This does not change or remove any previously
+    /// added headers, even if they have the same name.  To replace a
+    /// previously added header, use [`set_header`](#method.set_header)
+    /// instead.
+    pub fn add_header<H>(&mut self, header: H)
+        where H: Into<Header>
     {
-        let name = name.into();
-        let value = value.into();
-        self.headers.push(Header{name, value});
+        self.headers.push(header.into());
     }
 
     /// Append one or more headers with the given name and values derived from
@@ -423,12 +409,18 @@ impl MessageHeaders {
         }
         match mode {
             HeaderMultiMode::OneLine => {
-                self.add_header(name, values.join(","));
+                self.add_header(Header{
+                    name: name.into(),
+                    value: values.join(",")
+                });
             },
             HeaderMultiMode::MultiLine => {
-                let name = name.as_ref();
                 for value in values {
-                    self.add_header(name, value);
+                    let name = name.as_ref();
+                    self.add_header(Header{
+                        name: name.into(),
+                        value
+                    });
                 }
             },
         }
@@ -811,7 +803,10 @@ impl MessageHeaders {
         if matches > 1 {
             self.headers.truncate(len - matches + 1);
         } else if matches == 0 {
-            self.add_header(name, value);
+            self.add_header(Header{
+                name: name.into(),
+                value
+            });
         }
     }
 
@@ -841,11 +836,14 @@ impl MessageHeaders {
             },
             HeaderMultiMode::MultiLine => {
                 let name = name.as_ref();
-                for (i, value) in values.iter().enumerate() {
+                for (i, value) in values.into_iter().enumerate() {
                     if i == 0 {
                         self.set_header(name, value);
                     } else {
-                        self.add_header(name, value);
+                        self.add_header(Header{
+                            name: name.into(),
+                            value
+                        });
                     }
                 }
             },
@@ -1605,7 +1603,10 @@ mod tests {
         headers.set_header_multi_value("Via", via, HeaderMultiMode::OneLine);
         headers.set_header("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
         headers.set_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
-        headers.add_header("Via", "Trickster");
+        headers.add_header(Header{
+            name: "Via".into(),
+            value: "Trickster".into()
+        });
         assert_eq!(
             Ok(concat!(
                 "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
@@ -1650,7 +1651,10 @@ mod tests {
             ).as_bytes()),
             headers.generate().as_deref()
         );
-        headers.add_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+        headers.add_header(Header{
+            name: "From".into(),
+            value: "Alice <sip:alice@atlanta.com>;tag=1928301774".into()
+        });
         assert_eq!(
             Ok(concat!(
                 "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3,",
@@ -1706,7 +1710,10 @@ mod tests {
         let mut headers = MessageHeaders::new();
         headers.set_header_multi_value("Via", via, HeaderMultiMode::MultiLine);
         headers.set_header("To", "Bob <sip:bob@biloxi.com>;tag=a6c85cf");
-        headers.add_header("From", "Alice <sip:alice@atlanta.com>;tag=1928301774");
+        headers.add_header(Header{
+            name: "From".into(),
+            value: "Alice <sip:alice@atlanta.com>;tag=1928301774".into()
+        });
         assert_eq!(
             Ok(concat!(
                 "Via: SIP/2.0/UDP server10.biloxi.com ;branch=z9hG4bKnashds8;received=192.0.2.3\r\n",
