@@ -861,6 +861,24 @@ impl MessageHeaders {
 
 }
 
+impl IntoIterator for MessageHeaders {
+    type Item = Header;
+    type IntoIter = std::vec::IntoIter<Header>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.headers.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a MessageHeaders {
+    type Item = &'a Header;
+    type IntoIter = std::slice::Iter<'a, Header>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.headers).iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1861,6 +1879,65 @@ mod tests {
                     .collect()
             ),
             headers.generate()
+        );
+    }
+
+    #[test]
+    fn headers_into_iter_move() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        headers.parse(raw_message).unwrap();
+        assert_eq!(
+            vec![
+                Header{
+                    name: "User-Agent".into(),
+                    value: "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3".into(),
+                },
+                Header{
+                    name: "Host".into(),
+                    value: "www.example.com".into(),
+                },
+                Header{
+                    name: "Accept-Language".into(),
+                    value: "en, mi".into(),
+                },
+            ],
+            headers.into_iter().collect::<Vec<Header>>()
+        );
+    }
+
+    #[test]
+    fn headers_into_iter_borrow() {
+        let mut headers = MessageHeaders::new();
+        let raw_message = concat!(
+            "User-Agent: curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3\r\n",
+            "Host: www.example.com\r\n",
+            "Accept-Language: en, mi\r\n",
+            "\r\n",
+        );
+        headers.parse(raw_message).unwrap();
+        assert!(
+            [
+                Header{
+                    name: "User-Agent".into(),
+                    value: "curl/7.16.3 libcurl/7.16.3 OpenSSL/0.9.7l zlib/1.2.3".into(),
+                },
+                Header{
+                    name: "Host".into(),
+                    value: "www.example.com".into(),
+                },
+                Header{
+                    name: "Accept-Language".into(),
+                    value: "en, mi".into(),
+                },
+            ].iter().eq(
+                (&headers).into_iter()
+            )
         );
     }
 
