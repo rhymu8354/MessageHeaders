@@ -208,11 +208,21 @@ fn validate_header_value(
 #[derive(Clone, Debug, Default, Eq)]
 pub struct HeaderName(String);
 
-impl<T> From<T> for HeaderName
-    where T: AsRef<str>
-{
-    fn from(name: T) -> Self {
-        Self(name.as_ref().to_string())
+impl From<&str> for HeaderName {
+    fn from(name: &str) -> Self {
+        Self(name.to_string())
+    }
+}
+
+impl AsRef<str> for HeaderName {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for HeaderName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_ref())
     }
 }
 
@@ -410,7 +420,7 @@ impl MessageHeaders {
         match mode {
             HeaderMultiMode::OneLine => {
                 self.add_header(Header{
-                    name: name.into(),
+                    name: name.as_ref().into(),
                     value: values.join(",")
                 });
             },
@@ -934,6 +944,16 @@ mod tests {
                 "{} < {}", test_vector.lhs(), test_vector.rhs()
             );
         }
+    }
+
+    #[test]
+    fn header_name_to_string() {
+        let name = HeaderName::from("Content-Length");
+        let name_as_str = name.as_ref();
+        assert_eq!("Content-Length", name);
+        assert_eq!("Content-Length", name_as_str);
+        assert_eq!("Content-Length", name.to_string());
+        assert_eq!("Content-Length", format!("{}", name));
     }
 
     #[test]
