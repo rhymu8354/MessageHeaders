@@ -11,13 +11,13 @@ pub enum Error {
 
     /// The given line of input could not be interpreted as text.
     #[error("header line could not be interpreted as text")]
-    HeaderLineInvalidText{
+    HeaderLineInvalidText {
         /// This is the line which could not be interpreted as text.
         line: Vec<u8>,
 
         /// This is the UTF-8 conversion error that occurred trying
         /// to convert the line to text.
-        source: std::str::Utf8Error
+        source: std::str::Utf8Error,
     },
 
     /// The attached string was expected to be a header line, but does not
@@ -39,14 +39,14 @@ pub enum Error {
     /// The header with the attached name has a value containing an illegal
     /// character, found in the attached segment.
     #[error("header value contains an illegal character")]
-    HeaderValueContainsIllegalCharacter{
+    HeaderValueContainsIllegalCharacter {
         /// This is the name of the header whose value contained an illegal
         /// character.
         name: HeaderName,
 
         /// This is the part of the header value containing the illegal
         /// character.
-        value_segment: String
+        value_segment: String,
     },
 
     /// The attached error occurred during string formatting.
